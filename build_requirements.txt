@@ -1,0 +1,4 @@
+# Build-time requirements for creating Mac app bundle
+pyinstaller>=5.0
+# Include all runtime requirements
+-r fluorospot/requirements.txt

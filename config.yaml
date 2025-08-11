@@ -1,0 +1,55 @@
+# FluoroSpot Analysis Configuration
+# Edit these values to customize the analysis
+
+# Number of cells plated per well
+sfc_count: 200000
+
+# Number of SFCs for cutoff of positivity criteria
+sfc_cutoff: 20
+
+# Control stimulus, e.g. DMSO
+control_stim: DMSO
+
+# Cytokine to LED mapping
+# Format: cytokine name followed by corresponding LED number
+cytokines:
+  IFNg: LED490
+  IL-10: LED550
+  IL-17: LED640
+
+# Plate to spacies mapping
+# Format: plate label in Mabtech (case sensitive, so has to be EXACTLY as labeled in the software) to the corresponding species being tested on
+plates:
+  plate_1: "S. pneumoniae"
+
+# Experimental Conditions (optional) 
+#
+# ===============================================================================================================
+# === WARNING: this section must be deleted or commented out if there are no separate conditions on the plate ===
+# ===============================================================================================================
+#
+# Use this for plates with multiple control/stimuli groups.
+# The plate name key (e.g., "plate_1") and stimuli names must EXACTLY match what's in the data.
+experimental_conditions:
+  plate_1:
+    HKSA_expanded_cells_D1:
+      control: 'DMSO_D1'
+      stimuli: ['SA_P8_D1', 'SA_MP1_D1', 'SA_MP2_D1', 'PHA_D1']
+    HKSA_expanded_cells_D2:
+      control: 'DMSO_D2'
+      stimuli: ['SA_P8_D2', 'SA_MP1_D2', 'SA_MP2_D2', 'PHA_D2']
+    HKSA_expanded_cells_D3:
+      control: 'DMSO_D3'
+      stimuli: ['SA_P8_D3', 'SA_MP1_D3', 'SA_MP2_D3', 'PHA_D3']
+    HKSA_expanded_cells_D4:
+      control: 'DMSO_D4'
+      stimuli: ['SA_P8_D4', 'SA_MP1_D4', 'SA_MP2_D4', 'PHA_D4']
+    HKSA_expanded_cells_D5:
+      control: 'DMSO_D5'
+      stimuli: ['SA_P8_D5', 'SA_MP1_D5', 'SA_MP2_D5', 'PHA_D5']
+    Flu_expanded_cells:
+      control: 'DMSO_Flu'
+      stimuli: ['Flu', 'PHA_Flu']
+    Neg_meg_expanded_cells:
+      control: 'DMSO_Neg_meg'
+      stimuli: ['Neg_meg', 'PHA_Neg_meg']

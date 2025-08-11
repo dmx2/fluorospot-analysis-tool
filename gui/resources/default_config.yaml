@@ -1,0 +1,23 @@
+# Default FluoroSpot Analysis Configuration
+# This file contains default values for the GUI
+
+# Number of cells plated per well
+sfc_count: 200000
+
+# Number of SFCs for cutoff of positivity criteria
+sfc_cutoff: 20
+
+# Control stimulus, e.g. DMSO
+control_stim: DMSO
+
+# Cytokine to LED mapping
+# Format: cytokine name followed by corresponding LED number
+cytokines:
+  IFNg: LED490
+  IL-10: LED550
+  IL-17: LED640
+
+# Plate to species mapping
+# Format: plate label in Mabtech (case sensitive, so has to be EXACTLY as labeled in the software) to the corresponding species being tested on
+plates:
+  plate_1: "S. pneumoniae"
