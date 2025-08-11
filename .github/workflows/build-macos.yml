@@ -49,3 +49,31 @@ jobs:
         path: |
           *.dmg
           *.zip
+    
+    - name: Create Release and Upload Assets
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## FluoroSpot Analysis Tool ${{ github.ref_name }}
+          
+          ### Downloads
+          - **Intel Mac**: Download the `FluoroSpot_Analysis_Intel.dmg` file
+          - **Apple Silicon Mac**: Download the `FluoroSpot_Analysis_Apple-Silicon.dmg` file
+          
+          ### Installation
+          1. Download the appropriate DMG file for your Mac
+          2. Double-click to mount the DMG
+          3. Drag the application to your Applications folder
+          4. Run the application from Applications
+          
+          ### Changes
+          See the commit history for details on changes in this release.
+        files: |
+          *.dmg
+          *.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
