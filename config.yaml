@@ -2,7 +2,7 @@
 # Edit these values to customize the analysis
 
 # Number of cells plated per well
-sfc_count: 200000
+cells_per_well: 200000
 
 # Number of SFCs for cutoff of positivity criteria
 sfc_cutoff: 20

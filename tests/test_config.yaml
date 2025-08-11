@@ -1,0 +1,12 @@
+# Test configuration for FluoroSpot analysis unit tests
+cells_per_well: 200000
+sfc_cutoff: 20
+control_stim: DMSO
+
+cytokines:
+  IFNg: LED490
+  IL-10: LED550
+
+plates:
+  test_plate_1: "Test Species"
+  test_plate_2: "Another Species"

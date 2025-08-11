@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 @dataclass
 class AnalysisConfig:
   """Configuration for FluoroSpot analysis."""
-  sfc_count: int
+  cells_per_well: int
   sfc_cutoff: int
   control_stim: str
   cytokines: Dict[str, str]
@@ -130,7 +130,7 @@ class FluoroSpotAnalyzer:
     stim_values = stim_values[~np.isnan(stim_values)]
     control_avg = max(control_values.mean(), 1)
     
-    sfc_norm = (stim_values.mean() - control_avg) * (1000000 / self.config.sfc_count)
+    sfc_norm = (stim_values.mean() - control_avg) * (1000000 / self.config.cells_per_well)
     sfc_value = max(sfc_norm, 0)
     
     lambda_poisson = max(control_avg, 2)
