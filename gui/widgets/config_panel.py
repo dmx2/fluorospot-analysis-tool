@@ -6,7 +6,7 @@ from typing import Dict, Any, Callable, Optional
 from pathlib import Path
 import os
 
-from .dynamic_lists import CytokineListWidget, PlateListWidget, ExperimentalConditionsWidget
+from gui.widgets.dynamic_lists import CytokineListWidget, PlateListWidget, ExperimentalConditionsWidget
 
 
 class ConfigPanel(ttk.Frame):

@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import traceback
 
-from ...fluorospot_analysis import FluoroSpotAnalyzer, DataLoader
-from ..validation.data_validator import DataValidator
-from ..validation.config_validator import ConfigValidator
-from .config_builder import ConfigBuilder
+from fluorospot_analysis import FluoroSpotAnalyzer, DataLoader
+from gui.validation.data_validator import DataValidator
+from gui.validation.config_validator import ConfigValidator
+from gui.core.config_builder import ConfigBuilder
 
 
 class GUIController:

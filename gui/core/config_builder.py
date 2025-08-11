@@ -6,7 +6,7 @@ from typing import Dict, Any
 import tempfile
 import os
 
-from ...fluorospot_analysis import AnalysisConfig
+from fluorospot_analysis import AnalysisConfig
 
 
 class ConfigBuilder:

@@ -60,7 +60,7 @@ def create_app_bundle():
     "--exclude-module=matplotlib",  # Exclude if not needed to reduce size
     "--exclude-module=PIL",
     "--osx-bundle-identifier=org.iedb.fluorospot",
-    "../launch_gui.py"
+    "launch_gui.py"
   ]
   
   try:

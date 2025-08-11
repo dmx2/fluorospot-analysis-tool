@@ -14,24 +14,12 @@ import threading
 import queue
 import os
 
-try:
-  from .widgets.file_selector import FileSelector
-  from .widgets.config_panel import ConfigPanel
-  from .widgets.progress_dialog import ProgressDialog
-  from .core.gui_controller import GUIController
-  from .core.config_builder import ConfigBuilder
-except ImportError:
-  # Fallback for direct execution - add gui directory to path
-  import sys
-  from pathlib import Path
-  gui_dir = Path(__file__).parent
-  sys.path.insert(0, str(gui_dir))
-  
-  from widgets.file_selector import FileSelector
-  from widgets.config_panel import ConfigPanel
-  from widgets.progress_dialog import ProgressDialog
-  from core.gui_controller import GUIController
-  from core.config_builder import ConfigBuilder
+# Use absolute imports
+from gui.widgets.file_selector import FileSelector
+from gui.widgets.config_panel import ConfigPanel
+from gui.widgets.progress_dialog import ProgressDialog
+from gui.core.gui_controller import GUIController
+from gui.core.config_builder import ConfigBuilder
 
 
 class FluoroSpotGUI:
