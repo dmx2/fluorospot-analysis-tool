@@ -47,5 +47,5 @@ jobs:
       with:
         name: macos-build
         path: |
-          FluoroSpot_Analysis.dmg
-          FluoroSpot_Analysis_Mac.zip
+          *.dmg
+          *.zip

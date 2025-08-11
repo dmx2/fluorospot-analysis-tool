@@ -35,16 +35,20 @@ def clean_build():
         os.remove(path)
       print(f"  Removed: {path}")
 
-def create_app_bundle():
+def create_app_bundle(target_arch="arm64"):
   """Create the Mac app bundle using PyInstaller."""
-  print("🔨 Building Mac app bundle...")
+  arch_name = "Apple-Silicon" if target_arch == "arm64" else "Intel"
+  print(f"🔨 Building Mac app bundle for {arch_name} ({target_arch})...")
+  
+  app_name = f"FluoroSpot Analysis {arch_name}"
   
   # PyInstaller command
   cmd = [
     sys.executable, "-m", "PyInstaller",
     "--onedir",  # Create a directory instead of a single file for better performance
     "--windowed",  # No console window
-    "--name=FluoroSpot Analysis",
+    "--target-arch", target_arch,  # Specify target architecture
+    "--name", app_name,
     "--icon=build_resources/app_icon.icns",  # We'll create this
     "--add-data=gui/resources:fluorospot/gui/resources",
     "--add-data=config.yaml:fluorospot",
@@ -65,19 +69,18 @@ def create_app_bundle():
   
   try:
     result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    print("✅ App bundle created successfully!")
-    return True
+    print(f"✅ {arch_name} app bundle created successfully!")
+    return True, app_name
   except subprocess.CalledProcessError as e:
-    print(f"❌ Build failed: {e}")
+    print(f"❌ {arch_name} build failed: {e}")
     print(f"stdout: {e.stdout}")
     print(f"stderr: {e.stderr}")
-    return False
+    return False, None
 
-def create_dmg():
+def create_dmg(app_name):
   """Create a DMG file for distribution."""
-  print("💿 Creating DMG file...")
+  print(f"💿 Creating DMG file for {app_name}...")
   
-  app_name = "FluoroSpot Analysis"
   dmg_name = f"{app_name.replace(' ', '_')}.dmg"
   
   # Check if create-dmg is available (install with: brew install create-dmg)
@@ -106,14 +109,14 @@ def create_dmg():
   try:
     subprocess.run(cmd, check=True)
     print(f"✅ DMG created: {dmg_name}")
-    return True
+    return True, dmg_name
   except subprocess.CalledProcessError as e:
     print(f"❌ DMG creation failed: {e}")
     return create_basic_dmg(app_name, dmg_name)
 
 def create_basic_dmg(app_name, dmg_name):
   """Create a basic DMG file using hdiutil."""
-  print("📀 Creating basic DMG...")
+  print(f"📀 Creating basic DMG for {app_name}...")
   
   # Create temporary directory for DMG contents
   temp_dir = "temp_dmg"
@@ -139,20 +142,19 @@ def create_basic_dmg(app_name, dmg_name):
     shutil.rmtree(temp_dir)
     
     print(f"✅ Basic DMG created: {dmg_name}")
-    return True
+    return True, dmg_name
     
   except subprocess.CalledProcessError as e:
     print(f"❌ Basic DMG creation failed: {e}")
     # Clean up on failure
     if os.path.exists(temp_dir):
       shutil.rmtree(temp_dir)
-    return False
+    return False, None
 
-def create_zip_distribution():
+def create_zip_distribution(app_name):
   """Create a ZIP file as an alternative distribution method."""
-  print("📦 Creating ZIP distribution...")
+  print(f"📦 Creating ZIP distribution for {app_name}...")
   
-  app_name = "FluoroSpot Analysis"
   zip_name = f"{app_name.replace(' ', '_')}_Mac.zip"
   
   try:
@@ -162,15 +164,15 @@ def create_zip_distribution():
     ], check=True)
     
     print(f"✅ ZIP distribution created: {zip_name}")
-    return True
+    return True, zip_name
     
   except subprocess.CalledProcessError as e:
     print(f"❌ ZIP creation failed: {e}")
-    return False
+    return False, None
 
 def main():
   """Main build process."""
-  print("🚀 Starting Mac app build process...")
+  print("🚀 Starting Mac app build process for both Intel and Apple Silicon...")
   
   # Check we're on macOS
   if sys.platform != "darwin":
@@ -183,35 +185,64 @@ def main():
   # Clean previous builds
   clean_build()
   
-  # Create app bundle
-  if not create_app_bundle():
-    print("❌ Build failed!")
+  # Build for both architectures
+  architectures = [
+    ("x86_64", "Intel"),
+    ("arm64", "Apple Silicon")
+  ]
+  
+  built_apps = []
+  distribution_files = []
+  
+  for arch, arch_display in architectures:
+    print(f"\n{'='*60}")
+    print(f"Building for {arch_display} ({arch})")
+    print(f"{'='*60}")
+    
+    # Create app bundle for this architecture
+    success, app_name = create_app_bundle(target_arch=arch)
+    if not success:
+      print(f"❌ {arch_display} build failed! Continuing with other architectures...")
+      continue
+    
+    built_apps.append((app_name, arch_display))
+    
+    # Show app bundle info
+    app_path = Path(f"dist/{app_name}.app")
+    if app_path.exists():
+      size_mb = sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file()) / (1024 * 1024)
+      print(f"✅ {arch_display} app bundle: {app_path} ({size_mb:.1f} MB)")
+    
+    # Create distribution files for this architecture
+    dmg_success, dmg_name = create_dmg(app_name)
+    zip_success, zip_name = create_zip_distribution(app_name)
+    
+    if dmg_success:
+      distribution_files.append(f"📀 {dmg_name}")
+    if zip_success:
+      distribution_files.append(f"📦 {zip_name}")
+  
+  # Final summary
+  print(f"\n{'='*60}")
+  print("🎉 Build Summary")
+  print(f"{'='*60}")
+  
+  if built_apps:
+    print("Built applications:")
+    for app_name, arch_display in built_apps:
+      print(f"  ✅ {app_name} ({arch_display})")
+    
+    print("\nDistribution files:")
+    for dist_file in distribution_files:
+      print(f"  {dist_file}")
+    
+    print("\nNext steps:")
+    print("  1. Test both apps on clean Mac systems (Intel and Apple Silicon)")
+    print("  2. Upload distribution files to GitHub releases")
+    print("  3. Update documentation with download instructions")
+  else:
+    print("❌ No builds succeeded!")
     sys.exit(1)
-  
-  print("\n📊 Build Summary:")
-  print("=" * 50)
-  
-  # Show app bundle info
-  app_path = Path("dist/FluoroSpot Analysis.app")
-  if app_path.exists():
-    size_mb = sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file()) / (1024 * 1024)
-    print(f"✅ App bundle: {app_path} ({size_mb:.1f} MB)")
-  
-  # Create distribution files
-  dmg_success = create_dmg()
-  zip_success = create_zip_distribution()
-  
-  print("\n🎉 Build completed!")
-  print("Distribution files:")
-  if dmg_success:
-    print("  📀 DMG file ready for distribution")
-  if zip_success:
-    print("  📦 ZIP file ready for distribution")
-  
-  print("\nNext steps:")
-  print("  1. Test the app on a clean Mac system")
-  print("  2. Upload distribution files to GitLab releases")
-  print("  3. Update documentation with download instructions")
 
 if __name__ == "__main__":
   main()
