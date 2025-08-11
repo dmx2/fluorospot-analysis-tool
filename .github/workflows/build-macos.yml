@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -39,62 +42,10 @@ jobs:
       run: |
         python build_mac_app.py
     
-    - name: Get version from tag
-      id: get_version
-      run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        else
-          echo "version=dev-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Create release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
       with:
-        tag_name: ${{ steps.get_version.outputs.version }}
-        release_name: FluoroSpot Analysis Tool ${{ steps.get_version.outputs.version }}
-        draft: false
-        prerelease: false
-        body: |
-          ## FluoroSpot Analysis Tool ${{ steps.get_version.outputs.version }}
-          
-          ### Downloads
-          - **DMG Installer** (Recommended): Professional installer with drag-and-drop interface
-          - **ZIP Archive**: Simple archive for advanced users
-          
-          ### System Requirements
-          - macOS 10.14 (Mojave) or later
-          - ~200MB disk space
-          
-          ### Installation
-          1. Download the DMG file
-          2. Open the DMG and drag "FluoroSpot Analysis" to Applications
-          3. On first launch, right-click the app and select "Open" to bypass Gatekeeper
-          
-          ### What's New
-          - Automated build from latest source code
-          - Includes all required dependencies
-          - Ready to use - no additional software needed
-    
-    - name: Upload DMG to release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./FluoroSpot_Analysis.dmg
-        asset_name: FluoroSpot_Analysis_${{ steps.get_version.outputs.version }}.dmg
-        asset_content_type: application/x-apple-diskimage
-    
-    - name: Upload ZIP to release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./FluoroSpot_Analysis_Mac.zip
-        asset_name: FluoroSpot_Analysis_Mac_${{ steps.get_version.outputs.version }.zip
-        asset_content_type: application/zip
+        name: macos-build
+        path: |
+          FluoroSpot_Analysis.dmg
+          FluoroSpot_Analysis_Mac.zip
