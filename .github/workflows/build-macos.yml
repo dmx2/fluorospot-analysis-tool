@@ -11,7 +11,17 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x86_64
+            arch_name: Intel
+          - runner: macos-latest
+            arch: arm64
+            arch_name: Apple-Silicon
+    
+    runs-on: ${{ matrix.runner }}
     
     steps:
     - name: Checkout code
@@ -38,20 +48,37 @@ jobs:
         python create_app_icon.py
         cd ..
     
-    - name: Build macOS app
+    - name: Build macOS app for ${{ matrix.arch_name }}
       run: |
-        python build_mac_app.py
+        python build_single_arch.py ${{ matrix.arch }}
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: macos-build
+        name: macos-build-${{ matrix.arch_name }}
         path: |
           *.dmg
           *.zip
+  
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build-macos
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download Intel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-build-Intel
+        path: ./intel/
+    
+    - name: Download Apple Silicon artifacts  
+      uses: actions/download-artifact@v4
+      with:
+        name: macos-build-Apple-Silicon
+        path: ./apple-silicon/
     
     - name: Create Release and Upload Assets
-      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
         name: Release ${{ github.ref_name }}
@@ -71,8 +98,10 @@ jobs:
           ### Changes
           See the commit history for details on changes in this release.
         files: |
-          *.dmg
-          *.zip
+          intel/*.dmg
+          intel/*.zip
+          apple-silicon/*.dmg
+          apple-silicon/*.zip
         draft: false
         prerelease: false
       env:

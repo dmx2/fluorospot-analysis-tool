@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Build script for creating a Mac app bundle for FluoroSpot Analysis Tool.
-This script uses PyInstaller to create a standalone .app bundle.
+Build script for creating a Mac app bundle for a specific architecture.
+This script is used by GitHub Actions to build each architecture separately.
 """
 
 import subprocess
@@ -35,14 +35,14 @@ def clean_build():
         os.remove(path)
       print(f"  Removed: {path}")
 
-def create_app_bundle(target_arch="arm64"):
+def create_app_bundle(target_arch):
   """Create the Mac app bundle using PyInstaller."""
   arch_name = "Apple-Silicon" if target_arch == "arm64" else "Intel"
   print(f"🔨 Building Mac app bundle for {arch_name} ({target_arch})...")
   
   app_name = f"FluoroSpot Analysis {arch_name}"
   
-  # Check PyInstaller version and system architecture
+  # Check system architecture
   import platform
   current_arch = platform.machine()
   print(f"  Current system architecture: {current_arch}")
@@ -72,8 +72,7 @@ def create_app_bundle(target_arch="arm64"):
     "launch_gui.py"
   ]
   
-  # Add target-arch only if it's different from current architecture
-  # This helps avoid cross-compilation issues
+  # Add target-arch if needed for cross-compilation
   if target_arch != current_arch:
     cmd.insert(-1, "--target-arch")
     cmd.insert(-1, target_arch)
@@ -89,21 +88,6 @@ def create_app_bundle(target_arch="arm64"):
     print(f"❌ {arch_name} build failed: {e}")
     print(f"stdout: {e.stdout}")
     print(f"stderr: {e.stderr}")
-    
-    # If cross-compilation failed, try without target-arch flag
-    if target_arch != current_arch and "--target-arch" in cmd:
-      print(f"  Retrying {arch_name} build without cross-compilation...")
-      cmd_fallback = [arg for arg in cmd if arg not in ["--target-arch", target_arch]]
-      
-      try:
-        result = subprocess.run(cmd_fallback, check=True, capture_output=True, text=True)
-        print(f"✅ {arch_name} app bundle created successfully (fallback)!")
-        return True, app_name
-      except subprocess.CalledProcessError as e2:
-        print(f"❌ {arch_name} fallback build also failed: {e2}")
-        print(f"stdout: {e2.stdout}")
-        print(f"stderr: {e2.stderr}")
-    
     return False, None
 
 def create_dmg(app_name):
@@ -200,8 +184,20 @@ def create_zip_distribution(app_name):
     return False, None
 
 def main():
-  """Main build process."""
-  print("🚀 Starting Mac app build process for both Intel and Apple Silicon...")
+  """Main build process for single architecture."""
+  if len(sys.argv) != 2:
+    print("Usage: python build_single_arch.py <architecture>")
+    print("Architecture should be 'x86_64' or 'arm64'")
+    sys.exit(1)
+  
+  target_arch = sys.argv[1]
+  if target_arch not in ["x86_64", "arm64"]:
+    print(f"❌ Invalid architecture: {target_arch}")
+    print("Architecture should be 'x86_64' or 'arm64'")
+    sys.exit(1)
+  
+  arch_name = "Apple-Silicon" if target_arch == "arm64" else "Intel"
+  print(f"🚀 Starting Mac app build process for {arch_name}...")
   
   # Check we're on macOS
   if sys.platform != "darwin":
@@ -214,63 +210,41 @@ def main():
   # Clean previous builds
   clean_build()
   
-  # Build for both architectures
-  architectures = [
-    ("x86_64", "Intel"),
-    ("arm64", "Apple Silicon")
-  ]
+  # Build for the specific architecture
+  success, app_name = create_app_bundle(target_arch)
+  if not success:
+    print(f"❌ {arch_name} build failed!")
+    sys.exit(1)
   
-  built_apps = []
-  distribution_files = []
+  # Show app bundle info
+  app_path = Path(f"dist/{app_name}.app")
+  if app_path.exists():
+    size_mb = sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file()) / (1024 * 1024)
+    print(f"✅ {arch_name} app bundle: {app_path} ({size_mb:.1f} MB)")
   
-  for arch, arch_display in architectures:
-    print(f"\n{'='*60}")
-    print(f"Building for {arch_display} ({arch})")
-    print(f"{'='*60}")
-    
-    # Create app bundle for this architecture
-    success, app_name = create_app_bundle(target_arch=arch)
-    if not success:
-      print(f"❌ {arch_display} build failed! Continuing with other architectures...")
-      continue
-    
-    built_apps.append((app_name, arch_display))
-    
-    # Show app bundle info
-    app_path = Path(f"dist/{app_name}.app")
-    if app_path.exists():
-      size_mb = sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file()) / (1024 * 1024)
-      print(f"✅ {arch_display} app bundle: {app_path} ({size_mb:.1f} MB)")
-    
-    # Create distribution files for this architecture
-    dmg_success, dmg_name = create_dmg(app_name)
-    zip_success, zip_name = create_zip_distribution(app_name)
-    
-    if dmg_success:
-      distribution_files.append(f"📀 {dmg_name}")
-    if zip_success:
-      distribution_files.append(f"📦 {zip_name}")
+  # Create distribution files
+  dmg_success, dmg_name = create_dmg(app_name)
+  zip_success, zip_name = create_zip_distribution(app_name)
   
-  # Final summary
+  # Summary
   print(f"\n{'='*60}")
-  print("🎉 Build Summary")
+  print(f"🎉 {arch_name} Build Complete")
   print(f"{'='*60}")
   
-  if built_apps:
-    print("Built applications:")
-    for app_name, arch_display in built_apps:
-      print(f"  ✅ {app_name} ({arch_display})")
-    
-    print("\nDistribution files:")
+  print(f"✅ App bundle: {app_name}")
+  
+  distribution_files = []
+  if dmg_success:
+    distribution_files.append(f"📀 {dmg_name}")
+  if zip_success:
+    distribution_files.append(f"📦 {zip_name}")
+  
+  if distribution_files:
+    print("Distribution files:")
     for dist_file in distribution_files:
       print(f"  {dist_file}")
-    
-    print("\nNext steps:")
-    print("  1. Test both apps on clean Mac systems (Intel and Apple Silicon)")
-    print("  2. Upload distribution files to GitHub releases")
-    print("  3. Update documentation with download instructions")
   else:
-    print("❌ No builds succeeded!")
+    print("❌ No distribution files created!")
     sys.exit(1)
 
 if __name__ == "__main__":
