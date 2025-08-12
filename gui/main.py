@@ -28,8 +28,8 @@ class FluoroSpotGUI:
   def __init__(self):
     self.root = tk.Tk()
     self.root.title("FluoroSpot Analysis Tool")
-    self.root.geometry("900x700")
-    self.root.minsize(800, 600)
+    self.root.geometry("900x1000")
+    self.root.minsize(800, 700)
     
     # Initialize components
     self.controller = GUIController()

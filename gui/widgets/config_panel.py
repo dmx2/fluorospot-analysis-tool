@@ -122,7 +122,7 @@ class ConfigPanel(ttk.Frame):
     mappings_frame = ttk.Frame(self.notebook, padding="10")
     self.notebook.add(mappings_frame, text="Mappings")
     
-    # Configure grid
+    # Configure grid - give more weight to allow better space distribution
     mappings_frame.columnconfigure(0, weight=1)
     mappings_frame.rowconfigure(0, weight=1)
     mappings_frame.rowconfigure(1, weight=1)

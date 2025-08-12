@@ -25,6 +25,7 @@ class DynamicListWidget(ttk.Frame):
     
     # Configure grid
     main_frame.columnconfigure(0, weight=1)
+    main_frame.rowconfigure(1, weight=1)  # Make scrollable area expandable
     self.columnconfigure(0, weight=1)
     self.rowconfigure(0, weight=1)
     
@@ -52,7 +53,8 @@ class DynamicListWidget(ttk.Frame):
     canvas_frame.columnconfigure(0, weight=1)
     canvas_frame.rowconfigure(0, weight=1)
     
-    self.canvas = tk.Canvas(canvas_frame, height=120)  # Fixed height
+    # Use dynamic height with reasonable min/max bounds
+    self.canvas = tk.Canvas(canvas_frame, height=80, highlightthickness=0)
     scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.canvas.yview)
     
     self.scrollable_frame = ttk.Frame(self.canvas)
@@ -71,6 +73,10 @@ class DynamicListWidget(ttk.Frame):
     self.canvas.bind("<MouseWheel>", self._on_mousewheel)
     self.canvas.bind("<Button-4>", self._on_mousewheel)
     self.canvas.bind("<Button-5>", self._on_mousewheel)
+    
+    # Bind focus events for better scrolling
+    self.canvas.bind("<Enter>", self._bind_mousewheel)
+    self.canvas.bind("<Leave>", self._unbind_mousewheel)
   
   def _on_mousewheel(self, event):
     """Handle mouse wheel scrolling."""
@@ -78,6 +84,18 @@ class DynamicListWidget(ttk.Frame):
       self.canvas.yview_scroll(-1, "units")
     elif event.num == 5 or event.delta < 0:
       self.canvas.yview_scroll(1, "units")
+
+  def _bind_mousewheel(self, event):
+    """Bind mousewheel events when mouse enters canvas."""
+    self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+    self.canvas.bind_all("<Button-4>", self._on_mousewheel)
+    self.canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+  def _unbind_mousewheel(self, event):
+    """Unbind mousewheel events when mouse leaves canvas."""
+    self.canvas.unbind_all("<MouseWheel>")
+    self.canvas.unbind_all("<Button-4>")
+    self.canvas.unbind_all("<Button-5>")
   
   def add_entry(self, values: Optional[List[str]] = None):
     """Add a new entry row."""
@@ -352,7 +370,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     canvas_frame.columnconfigure(0, weight=1)
     canvas_frame.rowconfigure(0, weight=1)
     
-    self.canvas = tk.Canvas(canvas_frame, height=200)
+    self.canvas = tk.Canvas(canvas_frame, height=150, highlightthickness=0)
     scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.canvas.yview)
     
     self.scrollable_frame = ttk.Frame(self.canvas)
