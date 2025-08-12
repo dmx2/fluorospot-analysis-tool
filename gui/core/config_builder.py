@@ -19,7 +19,7 @@ class ConfigBuilder:
     """Convert GUI configuration to AnalysisConfig object."""
     
     # Extract basic settings
-    sfc_count = gui_config.get('sfc_count', 200000)
+    cells_per_well = gui_config.get('cells_per_well', 200000)
     sfc_cutoff = gui_config.get('sfc_cutoff', 20)
     control_stim = gui_config.get('control_stim', 'DMSO')
     
@@ -32,7 +32,7 @@ class ConfigBuilder:
     
     # Create AnalysisConfig object
     analysis_config = AnalysisConfig(
-      sfc_count=sfc_count,
+      cells_per_well=cells_per_well,
       sfc_cutoff=sfc_cutoff,
       control_stim=control_stim,
       cytokines=cytokines,
@@ -47,7 +47,7 @@ class ConfigBuilder:
     
     # Build YAML structure
     yaml_config = {
-      'sfc_count': gui_config.get('sfc_count', 200000),
+      'cells_per_well': gui_config.get('cells_per_well', 200000),
       'sfc_cutoff': gui_config.get('sfc_cutoff', 20),
       'control_stim': gui_config.get('control_stim', 'DMSO'),
       'cytokines': gui_config.get('cytokines', {}),
@@ -81,7 +81,7 @@ class ConfigBuilder:
     
     # Build YAML structure (same as temp file but for permanent storage)
     yaml_config = {
-      'sfc_count': gui_config.get('sfc_count', 200000),
+      'cells_per_well': gui_config.get('cells_per_well', 200000),
       'sfc_cutoff': gui_config.get('sfc_cutoff', 20),
       'control_stim': gui_config.get('control_stim', 'DMSO'),
       'cytokines': gui_config.get('cytokines', {}),
@@ -109,7 +109,7 @@ class ConfigBuilder:
     
     # Convert to GUI format
     gui_config = {
-      'sfc_count': yaml_config.get('sfc_count', 200000),
+      'cells_per_well': yaml_config.get('cells_per_well', 200000),
       'sfc_cutoff': yaml_config.get('sfc_cutoff', 20),
       'control_stim': yaml_config.get('control_stim', 'DMSO'),
       'cytokines': yaml_config.get('cytokines', {}),

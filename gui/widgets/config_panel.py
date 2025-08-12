@@ -48,9 +48,9 @@ class ConfigPanel(ttk.Frame):
     ttk.Label(basic_frame, text="Cells Plated per Well:").grid(
       row=0, column=0, sticky=tk.W, padx=(0, 10), pady=(0, 10)
     )
-    self.sfc_count_var = tk.StringVar(value="200000")
-    self.sfc_count_entry = ttk.Entry(basic_frame, textvariable=self.sfc_count_var, width=15)
-    self.sfc_count_entry.grid(row=0, column=1, sticky=tk.W, pady=(0, 10))
+    self.cells_per_well_var = tk.StringVar(value="200000")
+    self.cells_per_well_entry = ttk.Entry(basic_frame, textvariable=self.cells_per_well_var, width=15)
+    self.cells_per_well_entry.grid(row=0, column=1, sticky=tk.W, pady=(0, 10))
     
     ttk.Label(basic_frame, text="(Total number of cells plated per well)", 
          font=('TkDefaultFont', 8), foreground='gray').grid(
@@ -87,7 +87,7 @@ class ConfigPanel(ttk.Frame):
     self.create_validation_indicators(basic_frame)
     
     # Bind validation events
-    self.sfc_count_var.trace('w', lambda *args: self.validate_basic_settings())
+    self.cells_per_well_var.trace('w', lambda *args: self.validate_basic_settings())
     self.sfc_cutoff_var.trace('w', lambda *args: self.validate_basic_settings())
     self.control_stim_var.trace('w', lambda *args: self.validate_basic_settings())
   
@@ -98,11 +98,11 @@ class ConfigPanel(ttk.Frame):
     validation_frame.columnconfigure(1, weight=1)
     
     # Cells Plated Count validation
-    self.sfc_count_status = ttk.Label(validation_frame, text="")
-    self.sfc_count_status.grid(row=0, column=0, padx=(0, 5))
+    self.cells_per_well_status = ttk.Label(validation_frame, text="")
+    self.cells_per_well_status.grid(row=0, column=0, padx=(0, 5))
     
-    self.sfc_count_msg = ttk.Label(validation_frame, text="", font=('TkDefaultFont', 8))
-    self.sfc_count_msg.grid(row=0, column=1, sticky=tk.W)
+    self.cells_per_well_msg = ttk.Label(validation_frame, text="", font=('TkDefaultFont', 8))
+    self.cells_per_well_msg.grid(row=0, column=1, sticky=tk.W)
     
     # SFC Cutoff validation
     self.sfc_cutoff_status = ttk.Label(validation_frame, text="")
@@ -226,19 +226,19 @@ class ConfigPanel(ttk.Frame):
     """Validate basic settings and update indicators."""
     valid = True
     
-    # Validate SFC Count
+    # Validate Cells Per Well Count
     try:
-      sfc_count = int(self.sfc_count_var.get())
-      if sfc_count <= 0:
+      cells_per_well = int(self.cells_per_well_var.get())
+      if cells_per_well <= 0:
         raise ValueError("Must be positive")
-      elif sfc_count < 1000:
-        self.set_validation_status(self.sfc_count_status, self.sfc_count_msg, 
-                     "⚠️", f"Low cell count ({sfc_count}). Consider using higher values.", "orange")
+      elif cells_per_well < 1000:
+        self.set_validation_status(self.cells_per_well_status, self.cells_per_well_msg, 
+                     "⚠️", f"Low cell count ({cells_per_well}). Consider using higher values.", "orange")
       else:
-        self.set_validation_status(self.sfc_count_status, self.sfc_count_msg, 
-                     "✅", f"Cells plated: {sfc_count:,}", "green")
+        self.set_validation_status(self.cells_per_well_status, self.cells_per_well_msg, 
+                     "✅", f"Cells plated: {cells_per_well:,}", "green")
     except ValueError:
-      self.set_validation_status(self.sfc_count_status, self.sfc_count_msg, 
+      self.set_validation_status(self.cells_per_well_status, self.cells_per_well_msg, 
                    "❌", "Cell count must be a positive integer", "red")
       valid = False
     
@@ -322,7 +322,7 @@ class ConfigPanel(ttk.Frame):
   def get_configuration(self) -> Dict[str, Any]:
     """Get the current configuration as a dictionary."""
     config = {
-      'sfc_count': int(self.sfc_count_var.get()),
+      'cells_per_well': int(self.cells_per_well_var.get()),
       'sfc_cutoff': int(self.sfc_cutoff_var.get()),
       'control_stim': self.control_stim_var.get().strip(),
       'cytokines': self.cytokine_widget.get_cytokine_dict(),
@@ -341,8 +341,8 @@ class ConfigPanel(ttk.Frame):
   def set_configuration(self, config: Dict[str, Any]):
     """Set the configuration from a dictionary."""
     # Basic settings
-    if 'sfc_count' in config:
-      self.sfc_count_var.set(str(config['sfc_count']))
+    if 'cells_per_well' in config:
+      self.cells_per_well_var.set(str(config['cells_per_well']))
     if 'sfc_cutoff' in config:
       self.sfc_cutoff_var.set(str(config['sfc_cutoff']))
     if 'control_stim' in config:
@@ -389,7 +389,7 @@ class ConfigPanel(ttk.Frame):
   def reset(self):
     """Reset all configuration to default values."""
     # Reset basic settings
-    self.sfc_count_var.set("200000")
+    self.cells_per_well_var.set("200000")
     self.sfc_cutoff_var.set("20")
     self.control_stim_var.set("DMSO")
     
@@ -413,7 +413,7 @@ class ConfigPanel(ttk.Frame):
     state = 'normal' if enabled else 'disabled'
     
     # Basic settings
-    self.sfc_count_entry.configure(state=state)
+    self.cells_per_well_entry.configure(state=state)
     self.sfc_cutoff_entry.configure(state=state)
     self.control_stim_entry.configure(state=state)
     

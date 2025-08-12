@@ -42,19 +42,19 @@ class ConfigValidator:
     valid = True
     
     # Validate cell count
-    if 'sfc_count' not in config:
+    if 'cells_per_well' not in config:
       self.validation_results.append("❌ Missing cell count")
       valid = False
     else:
       try:
-        sfc_count = int(config['sfc_count'])
-        if sfc_count <= 0:
+        cells_per_well = int(config['cells_per_well'])
+        if cells_per_well <= 0:
           self.validation_results.append("❌ Cell count must be positive")
           valid = False
-        elif sfc_count < 1000:
-          self.validation_results.append(f"⚠️ Cell count is very low ({sfc_count})")
+        elif cells_per_well < 1000:
+          self.validation_results.append(f"⚠️ Cell count is very low ({cells_per_well})")
         else:
-          self.validation_results.append(f"✅ Cells plated: {sfc_count:,}")
+          self.validation_results.append(f"✅ Cells plated: {cells_per_well:,}")
       except (ValueError, TypeError):
         self.validation_results.append("❌ Cell count must be a valid integer")
         valid = False
