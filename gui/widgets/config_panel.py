@@ -31,7 +31,8 @@ class ConfigPanel(ttk.Frame):
     
     # Create tabs
     self.create_basic_settings_tab()
-    self.create_mappings_tab()
+    self.create_cytokines_tab()
+    self.create_plates_tab()
     self.create_experimental_tab()
     self.create_output_tab()
   
@@ -117,23 +118,31 @@ class ConfigPanel(ttk.Frame):
     self.control_stim_msg = ttk.Label(validation_frame, text="", font=('TkDefaultFont', 8))
     self.control_stim_msg.grid(row=2, column=1, sticky=tk.W)
   
-  def create_mappings_tab(self):
-    """Create the mappings tab for cytokines and plates."""
-    mappings_frame = ttk.Frame(self.notebook, padding="10")
-    self.notebook.add(mappings_frame, text="Mappings")
+  def create_cytokines_tab(self):
+    """Create the cytokines mapping tab."""
+    cytokines_frame = ttk.Frame(self.notebook, padding="10")
+    self.notebook.add(cytokines_frame, text="Cytokines")
     
-    # Configure grid - give more weight to allow better space distribution
-    mappings_frame.columnconfigure(0, weight=1)
-    mappings_frame.rowconfigure(0, weight=1)
-    mappings_frame.rowconfigure(1, weight=1)
+    # Configure grid
+    cytokines_frame.columnconfigure(0, weight=1)
+    cytokines_frame.rowconfigure(0, weight=1)
     
     # Cytokine mappings
-    self.cytokine_widget = CytokineListWidget(mappings_frame, self.on_config_changed)
-    self.cytokine_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+    self.cytokine_widget = CytokineListWidget(cytokines_frame, self.on_config_changed)
+    self.cytokine_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+  
+  def create_plates_tab(self):
+    """Create the plates mapping tab."""
+    plates_frame = ttk.Frame(self.notebook, padding="10")
+    self.notebook.add(plates_frame, text="Plates")
+    
+    # Configure grid
+    plates_frame.columnconfigure(0, weight=1)
+    plates_frame.rowconfigure(0, weight=1)
     
     # Plate mappings
-    self.plate_widget = PlateListWidget(mappings_frame, self.on_config_changed)
-    self.plate_widget.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+    self.plate_widget = PlateListWidget(plates_frame, self.on_config_changed)
+    self.plate_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
   
   def create_experimental_tab(self):
     """Create the experimental conditions tab."""

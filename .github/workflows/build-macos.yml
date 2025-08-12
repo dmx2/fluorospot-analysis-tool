@@ -94,6 +94,7 @@ jobs:
           2. Double-click to mount the DMG
           3. Drag the application to your Applications folder
           4. Run the application from Applications
+          5. You will likely need to go into Privacy & Settings to allow running the software.
           
           ### Changes
           See the commit history for details on changes in this release.
