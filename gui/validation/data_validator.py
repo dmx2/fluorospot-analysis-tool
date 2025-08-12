@@ -79,10 +79,10 @@ class DataValidator:
     
     self.validation_results.append(f"✅ Found {len(excel_files)} Excel file(s)")
     
-    # Validate each file
+    # Do lightweight validation of each file (just basic checks, no full data loading)
     all_valid = True
     for excel_file in excel_files:
-      file_valid, file_results = self.validate_file(excel_file)
+      file_valid, file_results = self.validate_file_lightweight(excel_file)
       if not file_valid:
         all_valid = False
       
@@ -91,6 +91,46 @@ class DataValidator:
         self.validation_results.append(f"  {excel_file.name}: {result}")
     
     return all_valid, self.validation_results
+  
+  def validate_file_lightweight(self, file_path: Path) -> Tuple[bool, List[str]]:
+    """Validate a file without loading all data - for directory scanning."""
+    results = []
+    
+    try:
+      # Check file existence and extension
+      if not file_path.exists():
+        results.append(f"❌ File does not exist")
+        return False, results
+      
+      if file_path.suffix.lower() not in ['.xlsx', '.xls']:
+        results.append(f"⚠️ File is not an Excel file")
+        return False, results
+      
+      # Check file size
+      file_size = file_path.stat().st_size
+      if file_size == 0:
+        results.append(f"❌ File is empty")
+        return False, results
+      elif file_size > 100 * 1024 * 1024:  # 100MB
+        results.append(f"⚠️ Large file ({file_size / (1024*1024):.1f} MB)")
+      else:
+        results.append(f"✅ Valid Excel file ({file_size / 1024:.0f} KB)")
+      
+      # Try to open file to check if it's corrupted (just check structure, don't load data)
+      try:
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        sheet_count = len(wb.worksheets)
+        results.append(f"✅ File readable with {sheet_count} sheet(s)")
+        wb.close()
+        return True, results
+      except Exception as e:
+        results.append(f"❌ Cannot open Excel file: {str(e)}")
+        return False, results
+        
+    except Exception as e:
+      results.append(f"❌ Validation error: {str(e)}")
+      return False, results
   
   def validate_dataframe(self, df: pd.DataFrame, source_name: str = "") -> Tuple[bool, List[str]]:
     """Validate the structure and content of a DataFrame."""
