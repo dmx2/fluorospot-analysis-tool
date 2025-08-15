@@ -237,6 +237,46 @@ class TestFluoroSpotAnalyzer:
     # The result might be empty if no suitable control is found
     assert isinstance(result_df, pd.DataFrame)
 
+  def test_analyze_plate_with_numerical_stimuli(self, analyzer):
+    # Test with numerical stimuli values like 4990.67
+    numerical_data = pd.DataFrame({
+      'Layout-Donor': ['D001'] * 8,
+      'Plate': ['plate_1'] * 8,
+      'Layout-Stimuli': ['DMSO', 'DMSO', 'DMSO', 'DMSO', 4990.67, 4990.67, 4990.67, 4990.67],
+      'Spot Forming Units (SFU)': [10, 12, 11, 9, 45, 50, 48, 52],
+      'Analyte Secreting Population': ['LED490 Total'] * 8
+    })
+    
+    result_df = analyzer._analyze_plate('D001', 'IFNg', numerical_data)
+    
+    assert not result_df.empty
+    # Should have both control and numerical stimulus entries
+    stimuli_in_results = set(result_df['Stimulus'].values)
+    assert 'DMSO' in stimuli_in_results
+    assert '4990.67' in stimuli_in_results  # Numerical stimulus should be converted to string
+
+  def test_breakout_donor_dfs_with_multiple_donors(self):
+    # Test splitting data with multiple donors
+    multi_donor_data = pd.DataFrame({
+      'Layout-Donor': ['DONOR_A'] * 4 + ['DONOR_B'] * 4,
+      'Plate': ['plate_1'] * 8,
+      'Layout-Stimuli': ['DMSO', 'DMSO', 'PHA', 'PHA'] * 2,
+      'Spot Forming Units (SFU)': [10, 12, 50, 55, 15, 18, 75, 80],
+      'Analyte Secreting Population': ['LED490 Total'] * 8
+    })
+    
+    donor_data = DataLoader._breakout_donor_dfs(multi_donor_data)
+    
+    assert len(donor_data) == 2
+    donors = [donor_id for donor_id, _ in donor_data]
+    assert 'DONOR_A' in donors
+    assert 'DONOR_B' in donors
+    
+    # Check that each donor has their correct data
+    for donor_id, donor_df in donor_data:
+      assert all(donor_df['Layout-Donor'] == donor_id)
+      assert len(donor_df) == 4  # Each donor should have 4 rows
+
 
 class TestIntegration:
   def test_full_analysis_pipeline(self):

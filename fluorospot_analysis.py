@@ -110,12 +110,15 @@ class FluoroSpotAnalyzer:
       results.append(control_row)
 
       for stimulus in stimuli:
-        if pd.isna(stimulus) or not isinstance(stimulus, str) or control_stim in stimulus:
+        if pd.isna(stimulus):
+          continue
+        stimulus_str = str(stimulus)
+        if control_stim in stimulus_str:
           continue
         stim_values = plate_df[plate_df['Layout-Stimuli'] == stimulus]['Spot Forming Units (SFU)'].values
         stats_result = self._calculate_statistics(control_values, stim_values)
         result_row = self._create_result_row(
-          donor_id, cytokine, stimulus, stim_values, stats_result, plate_df, 'default'
+          donor_id, cytokine, stimulus_str, stim_values, stats_result, plate_df, 'default'
         )
         results.append(result_row)
         
@@ -229,8 +232,16 @@ class DataLoader:
       if file.name.startswith('~') or not (file.suffix in ['.xlsx', '.xls']): # skip temp files
         continue
       df = pd.read_excel(file, sheet_name=1, engine='openpyxl')
-      donor_id = df['Layout-Donor'].dropna().unique()[0]
-      donor_data.append((donor_id, df))
+      
+      unique_donors = df['Layout-Donor'].dropna().unique()
+      if len(unique_donors) == 1:
+        donor_data.append((unique_donors[0], df))
+      else:
+        # Multiple donors in one file - split them
+        print(f"  - Found {len(unique_donors)} donors in file {file.name}: {list(unique_donors)}")
+        for donor_id in unique_donors:
+          donor_df = df[df['Layout-Donor'] == donor_id]
+          donor_data.append((donor_id, donor_df))
     return donor_data
 
 def main():

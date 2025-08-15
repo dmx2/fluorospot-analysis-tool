@@ -109,6 +109,43 @@ def create_no_response_test_data():
   })
 
 
+def create_numerical_stimuli_test_data():
+  """Create test data with numerical stimuli names."""
+  return pd.DataFrame({
+    'Layout-Donor': ['NUMERICAL001'] * 12,
+    'Plate': ['numerical_plate_1'] * 12,
+    'Layout-Stimuli': ['DMSO', 'DMSO', 'DMSO', 'DMSO', 4990.67, 4990.67, 4990.67, 4990.67, 1234, 1234, 1234, 1234],
+    'Spot Forming Units (SFU)': [8, 10, 9, 11, 50, 55, 48, 52, 35, 40, 38, 42],
+    'Analyte Secreting Population': ['LED490 Total'] * 12
+  })
+
+
+def create_multi_donor_single_plate_test_data():
+  """Create test data with multiple donors in a single plate file."""
+  # Donor 1 data
+  donor1_data = {
+    'Layout-Donor': ['DONOR_A'] * 8,
+    'Plate': ['plate_1'] * 8,
+    'Layout-Stimuli': ['DMSO', 'DMSO', 'DMSO', 'DMSO', 'PHA', 'PHA', 'PHA', 'PHA'],
+    'Spot Forming Units (SFU)': [10, 12, 8, 11, 50, 55, 48, 52],
+    'Analyte Secreting Population': ['LED490 Total'] * 8
+  }
+  
+  # Donor 2 data
+  donor2_data = {
+    'Layout-Donor': ['DONOR_B'] * 8,
+    'Plate': ['plate_1'] * 8,
+    'Layout-Stimuli': ['DMSO', 'DMSO', 'DMSO', 'DMSO', 'PHA', 'PHA', 'PHA', 'PHA'],
+    'Spot Forming Units (SFU)': [15, 18, 12, 16, 75, 80, 70, 78],
+    'Analyte Secreting Population': ['LED490 Total'] * 8
+  }
+  
+  df1 = pd.DataFrame(donor1_data)
+  df2 = pd.DataFrame(donor2_data)
+  
+  return pd.concat([df1, df2], ignore_index=True)
+
+
 if __name__ == '__main__':
   # Example usage
   print("Basic test data:")
