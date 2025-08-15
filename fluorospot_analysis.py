@@ -190,7 +190,7 @@ class FluoroSpotAnalyzer:
     row_data['Poisson Average'] = np.mean(stats.poisson_p_values) if stats.poisson_p_values else np.nan
     df = pd.DataFrame(row_data)
     df['Positive Response'] = (
-      (df['SFCs Normalized Per Million Cells'] > self.config.sfc_cutoff) &
+      (df['SFCs Normalized Per Million Cells'] >= self.config.sfc_cutoff) &
       (df['SI'] > 2) &
       ((df['t-test p-value'] < 0.05) | (df['Poisson Average'] < 0.05))
     )
