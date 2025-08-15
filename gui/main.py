@@ -68,7 +68,7 @@ class FluoroSpotGUI:
     self.create_header(main_frame)
     
     # File input section
-    self.file_selector = FileSelector(main_frame, self.on_file_selected)
+    self.file_selector = FileSelector(main_frame, self.on_file_selected, self.load_configuration)
     self.file_selector.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
     
     # Configuration panel (scrollable)

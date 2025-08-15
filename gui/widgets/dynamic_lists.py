@@ -309,6 +309,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     
     # Configure grid
     main_frame.columnconfigure(0, weight=1)
+    main_frame.rowconfigure(2, weight=1)  # Make conditions frame expandable
     self.columnconfigure(0, weight=1)
     self.rowconfigure(0, weight=1)
     
@@ -335,6 +336,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     self.conditions_frame = ttk.Frame(main_frame)
     self.conditions_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
     self.conditions_frame.columnconfigure(0, weight=1)
+    self.conditions_frame.rowconfigure(1, weight=1)  # Make canvas frame expandable
     
     # Initially disabled
     self.toggle_enabled()
@@ -370,7 +372,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     canvas_frame.columnconfigure(0, weight=1)
     canvas_frame.rowconfigure(0, weight=1)
     
-    self.canvas = tk.Canvas(canvas_frame, height=150, highlightthickness=0)
+    self.canvas = tk.Canvas(canvas_frame, height=300, highlightthickness=0)
     scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.canvas.yview)
     
     self.scrollable_frame = ttk.Frame(self.canvas)
@@ -417,7 +419,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     remove_plate_btn = ttk.Button(
       id_frame,
       text="Remove Plate",
-      command=lambda: self.remove_plate(plate_id)
+      command=lambda pid=plate_id: self.remove_plate(pid)
     )
     remove_plate_btn.grid(row=0, column=2)
     
@@ -430,7 +432,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     add_group_btn = ttk.Button(
       plate_frame,
       text="+ Add Group",
-      command=lambda: self.add_group(plate_id, groups_frame)
+      command=lambda pid=plate_id, gf=groups_frame: self.add_group(pid, gf)
     )
     add_group_btn.grid(row=2, column=0, sticky=tk.W, pady=(10, 0))
     
@@ -495,25 +497,33 @@ class ExperimentalConditionsWidget(ttk.Frame):
     
     stimuli_vars = []
     
+    # Create the button first
+    add_stimulus_btn = ttk.Button(stimuli_frame, text="+ Add Stimulus")
+    
     def add_stimulus():
       stimulus_var = tk.StringVar()
       stimulus_entry = ttk.Entry(stimuli_frame, textvariable=stimulus_var, width=20)
       stimulus_entry.grid(row=len(stimuli_vars), column=0, sticky=(tk.W, tk.E), pady=1)
       stimuli_vars.append(stimulus_var)
+      # Move the add button to the new position
+      add_stimulus_btn.grid(row=len(stimuli_vars), column=0, sticky=tk.W, pady=(5, 0))
       return stimulus_var
+    
+    # Configure the button command after the function is defined
+    add_stimulus_btn.configure(command=add_stimulus)
     
     # Add default stimuli
     add_stimulus().set("stimulus_1")
     add_stimulus().set("stimulus_2")
     
-    add_stimulus_btn = ttk.Button(stimuli_frame, text="+ Add Stimulus", command=add_stimulus)
-    add_stimulus_btn.grid(row=100, column=0, sticky=tk.W, pady=(5, 0))
+    # Position the button initially
+    add_stimulus_btn.grid(row=len(stimuli_vars), column=0, sticky=tk.W, pady=(5, 0))
     
     # Remove group button
     remove_group_btn = ttk.Button(
       group_frame,
       text="Remove Group",
-      command=lambda: self.remove_group(plate_id, group_name)
+      command=lambda pid=plate_id, gn=group_name: self.remove_group(pid, gn)
     )
     remove_group_btn.grid(row=0, column=2, padx=(10, 0))
     

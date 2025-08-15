@@ -9,9 +9,10 @@ import os
 class FileSelector(ttk.Frame):
   """Widget for selecting input files or directories with validation."""
   
-  def __init__(self, parent, callback=None):
+  def __init__(self, parent, callback=None, load_config_callback=None):
     super().__init__(parent)
     self.callback = callback
+    self.load_config_callback = load_config_callback
     self.selected_path = None
     self.is_directory = False
     
@@ -80,6 +81,15 @@ class FileSelector(ttk.Frame):
     
     self.status_label = ttk.Label(self.status_frame, text="", foreground="gray")
     self.status_label.grid(row=0, column=1, sticky=tk.W)
+    
+    # Load configuration button
+    self.load_config_btn = ttk.Button(
+      selector_frame,
+      text="Load Configuration",
+      command=self.load_configuration,
+      width=20
+    )
+    self.load_config_btn.grid(row=3, column=0, columnspan=3, pady=(10, 0))
     
   
   def on_input_type_changed(self):
@@ -199,3 +209,9 @@ class FileSelector(ttk.Frame):
     """Enable or disable the widget."""
     state = 'normal' if enabled else 'disabled'
     self.browse_btn.config(state=state)
+    self.load_config_btn.config(state=state)
+  
+  def load_configuration(self):
+    """Load configuration from a YAML file."""
+    if self.load_config_callback:
+      self.load_config_callback()
