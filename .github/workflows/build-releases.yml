@@ -1,4 +1,4 @@
-name: Build macOS App
+name: Build Cross-Platform Releases
 
 on:
   push:
@@ -60,9 +60,46 @@ jobs:
           *.dmg
           *.zip
   
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r build_requirements.txt
+        pip install -r requirements.txt
+        pip install Pillow
+    
+    - name: Create Windows icon
+      run: |
+        cd build_resources
+        python create_windows_icon.py
+        cd ..
+    
+    - name: Build Windows executable
+      run: |
+        python build_windows.py onefile
+    
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: |
+          *.zip
+          dist/windows/*.exe
+  
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build-macos
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     
     steps:
@@ -70,13 +107,19 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: macos-build-Intel
-        path: ./intel/
+        path: ./macos/intel/
     
     - name: Download Apple Silicon artifacts  
       uses: actions/download-artifact@v4
       with:
         name: macos-build-Apple-Silicon
-        path: ./apple-silicon/
+        path: ./macos/apple-silicon/
+    
+    - name: Download Windows artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-build
+        path: ./windows/
     
     - name: Create Release and Upload Assets
       uses: softprops/action-gh-release@v2
@@ -86,23 +129,38 @@ jobs:
           ## FluoroSpot Analysis Tool ${{ github.ref_name }}
           
           ### Downloads
+          
+          **Windows:**
+          - Download the `FluoroSpot_Analysis_Tool_Windows.zip` file
+          - Extract and run `FluoroSpot_Analysis_Tool.exe`
+          
+          **macOS:**
           - **Intel Mac**: Download the `FluoroSpot_Analysis_Intel.dmg` file
           - **Apple Silicon Mac**: Download the `FluoroSpot_Analysis_Apple-Silicon.dmg` file
           
           ### Installation
+          
+          **Windows:**
+          1. Download and extract the ZIP file
+          2. Run `FluoroSpot_Analysis_Tool.exe`
+          3. Windows may show a security warning - click "More info" then "Run anyway"
+          
+          **macOS:**
           1. Download the appropriate DMG file for your Mac
           2. Double-click to mount the DMG
           3. Drag the application to your Applications folder
           4. Run the application from Applications
-          5. You will likely need to go into Privacy & Settings to allow running the software.
+          5. You will likely need to go into Privacy & Settings to allow running the software
           
           ### Changes
           See the commit history for details on changes in this release.
         files: |
-          intel/*.dmg
-          intel/*.zip
-          apple-silicon/*.dmg
-          apple-silicon/*.zip
+          windows/*.zip
+          windows/*.exe
+          macos/intel/*.dmg
+          macos/intel/*.zip
+          macos/apple-silicon/*.dmg
+          macos/apple-silicon/*.zip
         draft: false
         prerelease: false
       env:
