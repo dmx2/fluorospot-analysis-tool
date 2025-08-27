@@ -11,7 +11,7 @@ from pathlib import Path
 
 def create_simple_icon():
     """Create a simple icon using ImageMagick or Pillow."""
-    print("🎨 Creating Windows app icon...")
+    print("Creating Windows app icon...")
     
     # Try ImageMagick first (if available)
     if check_imagemagick():
@@ -21,7 +21,7 @@ def create_simple_icon():
     try:
         return create_icon_pillow()
     except ImportError:
-        print("❌ Neither ImageMagick nor Pillow found")
+        print("Neither ImageMagick nor Pillow found")
         return create_placeholder_icon()
 
 def check_imagemagick():
@@ -83,7 +83,7 @@ def create_icon_imagemagick():
     
     try:
         subprocess.run(cmd, check=True)
-        print(f"✅ Base icon created: {icon_png}")
+        print(f"Base icon created: {icon_png}")
         
         # Convert to ICO format with multiple sizes
         ico_cmd = [magick_cmd, icon_png, "-define", "icon:auto-resize=256,128,64,48,32,16", ico_file]
@@ -92,22 +92,22 @@ def create_icon_imagemagick():
         # Clean up PNG
         os.remove(icon_png)
         
-        print(f"✅ ICO icon created: {ico_file}")
+        print(f"ICO icon created: {ico_file}")
         return True
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ ImageMagick icon creation failed: {e}")
+        print(f"ImageMagick icon creation failed: {e}")
         print("   Falling back to Pillow...")
         return False
 
 def create_icon_pillow():
     """Create icon using Pillow (PIL)."""
-    print("🐍 Using Pillow to create icon...")
+    print("Using Pillow to create icon...")
     
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
-        print("❌ Pillow not found. Installing...")
+        print("Pillow not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
         from PIL import Image, ImageDraw, ImageFont
     
@@ -173,17 +173,17 @@ def create_icon_pillow():
     # Save as ICO
     images[0].save(ico_file, format='ICO', sizes=[img.size for img in images])
     
-    print(f"✅ ICO icon created with Pillow: {ico_file}")
+    print(f"ICO icon created with Pillow: {ico_file}")
     return True
 
 def create_placeholder_icon():
     """Create a placeholder icon."""
-    print("📝 Creating placeholder Windows icon...")
+    print("Creating placeholder Windows icon...")
     
     try:
         from PIL import Image
     except ImportError:
-        print("❌ Cannot create placeholder without Pillow")
+        print("Cannot create placeholder without Pillow")
         return False
     
     # Create a simple solid color icon
@@ -196,12 +196,12 @@ def create_placeholder_icon():
     
     images[0].save(ico_file, format='ICO', sizes=[img.size for img in images])
     
-    print(f"✅ Placeholder icon created: {ico_file}")
+    print(f"Placeholder icon created: {ico_file}")
     return True
 
 def main():
     """Main icon creation process."""
-    print("🚀 Starting Windows icon creation...")
+    print("Starting Windows icon creation...")
     
     # Create icon
     success = create_simple_icon()
@@ -210,11 +210,11 @@ def main():
         ico_path = Path("app_icon.ico")
         if ico_path.exists():
             size_kb = ico_path.stat().st_size / 1024
-            print(f"✅ Windows app icon created successfully! ({size_kb:.1f} KB)")
+            print(f"Windows app icon created successfully! ({size_kb:.1f} KB)")
         else:
-            print("✅ Windows app icon creation completed!")
+            print("Windows app icon creation completed!")
     else:
-        print("❌ Failed to create Windows app icon")
+        print("Failed to create Windows app icon")
         print("   You may need to manually create build_resources/app_icon.ico")
         print("   Or install ImageMagick or Pillow: pip install Pillow")
 

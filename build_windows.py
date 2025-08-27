@@ -15,18 +15,18 @@ def check_dependencies():
     """Check if required build dependencies are installed."""
     try:
         import PyInstaller
-        print(f"✅ PyInstaller found: {PyInstaller.__version__}")
+        print(f"PyInstaller found: {PyInstaller.__version__}")
     except ImportError:
-        print("❌ PyInstaller not found. Installing...")
+        print("PyInstaller not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
     
     # Ensure project dependencies are installed
-    print("📦 Installing project dependencies...")
+    print("Installing project dependencies...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
 
 def clean_build():
     """Clean previous build artifacts."""
-    print("🧹 Cleaning previous build artifacts...")
+    print("Cleaning previous build artifacts...")
     paths_to_clean = ["build", "dist", "*.spec"]
     for path in paths_to_clean:
         if os.path.exists(path):
@@ -38,7 +38,7 @@ def clean_build():
 
 def create_executable(build_type="onefile"):
     """Create the Windows executable using PyInstaller."""
-    print(f"🔨 Building Windows executable ({build_type})...")
+    print(f"Building Windows executable ({build_type})...")
     
     app_name = "FluoroSpot_Analysis_Tool"
     
@@ -64,7 +64,7 @@ def create_executable(build_type="onefile"):
     if os.path.exists(icon_path):
         cmd.extend(["--icon", icon_path])
     else:
-        print("⚠️  Windows icon not found, building without icon")
+        print("Windows icon not found, building without icon")
     
     # Add data files and hidden imports
     cmd.extend([
@@ -86,31 +86,31 @@ def create_executable(build_type="onefile"):
     
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print(f"✅ Windows executable created successfully!")
+        print(f"Windows executable created successfully!")
         return True, app_name
     except subprocess.CalledProcessError as e:
-        print(f"❌ Windows build failed: {e}")
+        print(f"Windows build failed: {e}")
         print(f"stdout: {e.stdout}")
         print(f"stderr: {e.stderr}")
         return False, None
 
 def create_installer():
     """Create an NSIS installer (if available)."""
-    print("💿 Checking for NSIS installer capability...")
+    print("Checking for NSIS installer capability...")
     
     # Check if NSIS is available (would need to be installed separately)
     try:
         subprocess.check_output(["makensis", "/VERSION"])
-        print("✅ NSIS found, but installer creation not implemented yet")
+        print("NSIS found, but installer creation not implemented yet")
         print("   This could be added in a future enhancement")
         return True, "installer_placeholder"
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print("⚠️  NSIS not found. Skipping installer creation.")
+        print("NSIS not found. Skipping installer creation.")
         return False, None
 
 def create_zip_distribution(app_name, build_type="onefile"):
     """Create a ZIP file for distribution."""
-    print(f"📦 Creating ZIP distribution for {app_name}...")
+    print(f"Creating ZIP distribution for {app_name}...")
     
     zip_name = f"{app_name}_Windows.zip"
     
@@ -122,7 +122,7 @@ def create_zip_distribution(app_name, build_type="onefile"):
                 if os.path.exists(exe_path):
                     zipf.write(exe_path, f"{app_name}.exe")
                 else:
-                    print(f"❌ Executable not found: {exe_path}")
+                    print(f"Executable not found: {exe_path}")
                     return False, None
             else:
                 # Directory distribution
@@ -134,7 +134,7 @@ def create_zip_distribution(app_name, build_type="onefile"):
                             arcname = os.path.relpath(file_path, f"dist/windows")
                             zipf.write(file_path, arcname)
                 else:
-                    print(f"❌ Distribution directory not found: {dist_dir}")
+                    print(f"Distribution directory not found: {dist_dir}")
                     return False, None
             
             # Add README or instructions if they exist
@@ -144,11 +144,11 @@ def create_zip_distribution(app_name, build_type="onefile"):
                     zipf.write(readme, readme)
                     break
         
-        print(f"✅ ZIP distribution created: {zip_name}")
+        print(f"ZIP distribution created: {zip_name}")
         return True, zip_name
         
     except Exception as e:
-        print(f"❌ ZIP creation failed: {e}")
+        print(f"ZIP creation failed: {e}")
         return False, None
 
 def main():
@@ -164,14 +164,14 @@ def main():
             print("  onedir:  Create directory with executable and dependencies")
             sys.exit(1)
     
-    print(f"🚀 Starting Windows build process ({build_type})...")
+    print(f"Starting Windows build process ({build_type})...")
     
     # Check we're on Windows (or allow cross-compilation)
     if sys.platform == "darwin":
-        print("⚠️  Running on macOS - cross-compilation to Windows may not work")
+        print("Running on macOS - cross-compilation to Windows may not work")
         print("   Consider running this on a Windows machine or GitHub Actions")
     elif sys.platform.startswith("linux"):
-        print("⚠️  Running on Linux - cross-compilation to Windows may not work")
+        print("Running on Linux - cross-compilation to Windows may not work")
         print("   Consider running this on a Windows machine or GitHub Actions")
     
     # Check dependencies
@@ -186,7 +186,7 @@ def main():
     # Build the executable
     success, app_name = create_executable(build_type)
     if not success:
-        print("❌ Windows build failed!")
+        print("Windows build failed!")
         sys.exit(1)
     
     # Show executable info
@@ -194,12 +194,12 @@ def main():
         exe_path = Path(f"dist/windows/{app_name}.exe")
         if exe_path.exists():
             size_mb = exe_path.stat().st_size / (1024 * 1024)
-            print(f"✅ Windows executable: {exe_path} ({size_mb:.1f} MB)")
+            print(f"Windows executable: {exe_path} ({size_mb:.1f} MB)")
     else:
         dist_path = Path(f"dist/windows/{app_name}")
         if dist_path.exists():
             size_mb = sum(f.stat().st_size for f in dist_path.rglob('*') if f.is_file()) / (1024 * 1024)
-            print(f"✅ Windows distribution: {dist_path} ({size_mb:.1f} MB)")
+            print(f"Windows distribution: {dist_path} ({size_mb:.1f} MB)")
     
     # Create distribution files
     zip_success, zip_name = create_zip_distribution(app_name, build_type)
@@ -207,23 +207,23 @@ def main():
     
     # Summary
     print(f"\n{'='*60}")
-    print("🎉 Windows Build Complete")
+    print("Windows Build Complete")
     print(f"{'='*60}")
     
-    print(f"✅ Executable: {app_name}")
+    print(f"Executable: {app_name}")
     
     distribution_files = []
     if zip_success:
-        distribution_files.append(f"📦 {zip_name}")
+        distribution_files.append(f"{zip_name}")
     if installer_success and installer_name != "installer_placeholder":
-        distribution_files.append(f"💿 {installer_name}")
+        distribution_files.append(f"{installer_name}")
     
     if distribution_files:
         print("Distribution files:")
         for dist_file in distribution_files:
             print(f"  {dist_file}")
     else:
-        print("❌ No distribution files created!")
+        print("No distribution files created!")
         sys.exit(1)
     
     print("\nNext steps:")
