@@ -15,13 +15,18 @@ def create_simple_icon():
     
     # Try ImageMagick first (if available)
     if check_imagemagick():
-        return create_icon_imagemagick()
+        if create_icon_imagemagick():
+            return True
     
     # Fall back to Pillow
     try:
+        print("Trying Pillow icon creation...")
         return create_icon_pillow()
-    except ImportError:
-        print("Neither ImageMagick nor Pillow found")
+    except ImportError as e:
+        print(f"Pillow import failed: {e}")
+        return create_placeholder_icon()
+    except Exception as e:
+        print(f"Pillow icon creation failed: {e}")
         return create_placeholder_icon()
 
 def check_imagemagick():
@@ -148,6 +153,7 @@ def create_icon_pillow():
                     continue
             
             if font_large is None:
+                print("Warning: No TrueType font found, using default font")
                 raise OSError("No suitable font found")
                 
         elif sys.platform == "darwin":

@@ -80,10 +80,14 @@ def create_executable(build_type="onefile"):
     # Add icon if it exists
     icon_path = "build_resources/app_icon.ico"
     if os.path.exists(icon_path):
-        cmd.extend(["--icon", icon_path])
-        print(f"  Using icon: {icon_path}")
+        # Use absolute path to avoid PyInstaller path confusion
+        icon_abs_path = os.path.abspath(icon_path)
+        cmd.extend(["--icon", icon_abs_path])
+        print(f"  Using icon: {icon_abs_path}")
     else:
         print("  WARNING: Windows icon not found, building without icon")
+        print(f"    Looked for icon at: {os.path.abspath(icon_path)}")
+        print("    Make sure 'python create_windows_icon.py' was run successfully")
     
     # Add data files and hidden imports
     gui_resources_path = os.path.abspath("gui/resources")

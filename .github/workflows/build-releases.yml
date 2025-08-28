@@ -82,6 +82,11 @@ jobs:
         cd build_resources
         python create_windows_icon.py
         cd ..
+        if (!(Test-Path "build_resources/app_icon.ico")) { 
+          Write-Error "Icon creation failed - app_icon.ico not found" 
+          exit 1 
+        }
+        Write-Output "Icon created successfully: build_resources/app_icon.ico"
     
     - name: Build Windows executable
       run: |
