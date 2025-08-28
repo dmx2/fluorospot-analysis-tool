@@ -48,6 +48,24 @@ def create_executable(build_type="onefile"):
     print(f"  Current system architecture: {current_arch}")
     print(f"  Target platform: Windows")
     
+    # Validate required files exist
+    required_files = [
+        ("launch_gui.py", "Launch script"),
+        ("config.yaml", "Configuration file"),
+        ("gui/resources", "GUI resources directory")
+    ]
+    
+    missing_files = []
+    for file_path, description in required_files:
+        if not os.path.exists(file_path):
+            missing_files.append(f"  - {description}: {file_path}")
+    
+    if missing_files:
+        print("ERROR: Required files missing:")
+        for missing in missing_files:
+            print(missing)
+        return False, None
+    
     # PyInstaller command
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -63,13 +81,24 @@ def create_executable(build_type="onefile"):
     icon_path = "build_resources/app_icon.ico"
     if os.path.exists(icon_path):
         cmd.extend(["--icon", icon_path])
+        print(f"  Using icon: {icon_path}")
     else:
-        print("Windows icon not found, building without icon")
+        print("  WARNING: Windows icon not found, building without icon")
     
     # Add data files and hidden imports
+    gui_resources_path = os.path.abspath("gui/resources")
+    config_path = os.path.abspath("config.yaml")
+    
+    print(f"  Adding GUI resources: {gui_resources_path}")
+    print(f"  Adding config file: {config_path}")
+    
+    # Use OS-specific path separator for PyInstaller --add-data
+    # Windows uses semicolon (;), Unix/Linux/macOS use colon (:)
+    path_sep = ";" if sys.platform == "win32" else ":"
+    
     cmd.extend([
-        "--add-data", "gui/resources;fluorospot/gui/resources",
-        "--add-data", "config.yaml;fluorospot",
+        "--add-data", f"{gui_resources_path}{path_sep}fluorospot/gui/resources",
+        "--add-data", f"{config_path}{path_sep}fluorospot",
         "--hidden-import", "tkinter",
         "--hidden-import", "tkinter.ttk",
         "--hidden-import", "tkinter.filedialog",
@@ -84,14 +113,29 @@ def create_executable(build_type="onefile"):
         "launch_gui.py"
     ])
     
+    print("  Running PyInstaller...")
+    print(f"  Command: {' '.join(cmd)}")
+    
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print(f"Windows executable created successfully!")
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(f"  Windows executable created successfully!")
+        
+        # Verify the executable was created
+        if build_type == "onefile":
+            exe_path = f"dist/windows/{app_name}.exe"
+            if os.path.exists(exe_path):
+                print(f"  Executable verified: {exe_path}")
+            else:
+                print(f"  WARNING: Expected executable not found: {exe_path}")
+        
         return True, app_name
     except subprocess.CalledProcessError as e:
-        print(f"Windows build failed: {e}")
-        print(f"stdout: {e.stdout}")
-        print(f"stderr: {e.stderr}")
+        print(f"ERROR: Windows build failed!")
+        print(f"Return code: {e.returncode}")
+        if e.stdout:
+            print(f"STDOUT:\n{e.stdout}")
+        if e.stderr:
+            print(f"STDERR:\n{e.stderr}")
         return False, None
 
 def create_installer():
@@ -128,7 +172,7 @@ def create_zip_distribution(app_name, build_type="onefile"):
                 # Directory distribution
                 dist_dir = f"dist/windows/{app_name}"
                 if os.path.exists(dist_dir):
-                    for root, dirs, files in os.walk(dist_dir):
+                    for root, _, files in os.walk(dist_dir):
                         for file in files:
                             file_path = os.path.join(root, file)
                             arcname = os.path.relpath(file_path, f"dist/windows")

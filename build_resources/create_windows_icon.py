@@ -126,10 +126,30 @@ def create_icon_pillow():
     
     # Add text
     try:
-        # Try to use a system font
+        # Try to use a system font with better fallbacks
         if sys.platform == "win32":
-            font_large = ImageFont.truetype("arial.ttf", 36)
-            font_small = ImageFont.truetype("arial.ttf", 16)
+            # Try multiple Windows font paths
+            font_paths = [
+                "arial.ttf",
+                "C:/Windows/Fonts/arial.ttf", 
+                "C:/Windows/Fonts/calibri.ttf",
+                "C:/Windows/Fonts/tahoma.ttf"
+            ]
+            font_large = None
+            font_small = None
+            
+            for font_path in font_paths:
+                try:
+                    font_large = ImageFont.truetype(font_path, 36)
+                    font_small = ImageFont.truetype(font_path, 16)
+                    print(f"Using font: {font_path}")
+                    break
+                except (OSError, IOError):
+                    continue
+            
+            if font_large is None:
+                raise OSError("No suitable font found")
+                
         elif sys.platform == "darwin":
             font_large = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 36)
             font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
@@ -139,6 +159,7 @@ def create_icon_pillow():
             font_small = ImageFont.load_default()
     except (OSError, IOError):
         # Fall back to default font
+        print("Warning: Using default font (may look poor)")
         font_large = ImageFont.load_default()
         font_small = ImageFont.load_default()
     
@@ -214,9 +235,10 @@ def main():
         else:
             print("Windows app icon creation completed!")
     else:
-        print("Failed to create Windows app icon")
+        print("ERROR: Failed to create Windows app icon")
         print("   You may need to manually create build_resources/app_icon.ico")
         print("   Or install ImageMagick or Pillow: pip install Pillow")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
