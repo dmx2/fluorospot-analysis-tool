@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 import yaml
 
 import sys
@@ -17,52 +17,40 @@ from fluorospot_analysis import (
 )
 
 
-class TestAnalysisConfig:
-  def test_analysis_config_creation(self):
-    config = AnalysisConfig(
-      cells_per_well=200000,
-      sfc_cutoff=20,
-      control_stim="DMSO",
-      cytokines={"IFNg": "LED490"},
-      plates={"plate_1": "S. pneumoniae"}
-    )
-    assert config.cells_per_well == 200000
-    assert config.sfc_cutoff == 20
-    assert config.control_stim == "DMSO"
-    assert config.experimental_conditions is None
-
-
-class TestAnalysisResult:
-  def test_analysis_result_creation(self):
-    result = AnalysisResult(
-      t_test_p=0.05,
-      si=2.5,
-      poisson_p_values=[0.01, 0.02, 0.03],
-      sfc_value=50.0
-    )
-    assert result.t_test_p == 0.05
-    assert result.si == 2.5
-    assert result.poisson_p_values == [0.01, 0.02, 0.03]
-    assert result.sfc_value == 50.0
-
-
 class TestDataLoader:
-  def test_load_config(self):
-    config_data = {
+  def test_load_config_reads_populations_and_defaults(self, tmp_path):
+    config_file = tmp_path / 'config.yaml'
+    config_file.write_text(yaml.dump({
       'cells_per_well': 200000,
       'sfc_cutoff': 20,
       'control_stim': 'DMSO',
       'cytokines': {'IFNg': 'LED490'},
-      'plates': {'plate_1': 'S. pneumoniae'}
-    }
-    
-    with patch('builtins.open', mock_open(read_data=yaml.dump(config_data))):
-      with patch('yaml.safe_load', return_value=config_data):
-        config = DataLoader.load_config(Path('config.yaml'))
-        
-    assert isinstance(config, AnalysisConfig)
-    assert config.cells_per_well == 200000
-    assert config.control_stim == 'DMSO'
+      'plates': {'plate_1': 'S. pneumoniae'},
+      'populations': ['LED490 Total', 'LED490+LED550'],
+    }))
+
+    config = DataLoader.load_config(config_file)
+
+    assert config.populations == ['LED490 Total', 'LED490+LED550']
+    assert config.experimental_conditions is None
+
+  def test_load_config_without_populations_keeps_totals_default(self, tmp_path):
+    config_file = tmp_path / 'config.yaml'
+    config_file.write_text(yaml.dump({
+      'cells_per_well': 200000,
+      'sfc_cutoff': 20,
+      'control_stim': 'DMSO',
+      'cytokines': {'IFNg': 'LED490'},
+      'plates': {'plate_1': 'S. pneumoniae'},
+    }))
+
+    config = DataLoader.load_config(config_file)
+
+    assert config.populations is None
+    endpoints = FluoroSpotAnalyzer(config).endpoints_for(pd.DataFrame({
+      'Analyte Secreting Population': ['LED490 Total']
+    }))
+    assert [endpoint.label for endpoint in endpoints] == ['LED490 Total']
 
   def test_breakout_donor_dfs(self):
     df = pd.DataFrame({
@@ -227,15 +215,18 @@ class TestFluoroSpotAnalyzer:
     assert not result_df.empty
     assert 'test_condition' in result_df['Experimental Condition'].values
 
-  def test_analyze_plate_missing_control_warning(self, analyzer, sample_data):
-    # Test with sample data that doesn't have the expected control
+  def test_analyze_plate_without_control_is_not_evaluable(self, analyzer, sample_data):
+    # No row matches the configured control stimulus at all
     modified_data = sample_data.copy()
     modified_data.loc[modified_data['Layout-Stimuli'] == 'DMSO', 'Layout-Stimuli'] = 'OTHER'
-    
+
     result_df = analyzer._analyze_plate('D001', 'IFNg', modified_data)
-    
-    # The result might be empty if no suitable control is found
-    assert isinstance(result_df, pd.DataFrame)
+
+    scored = result_df[result_df['Stimulus'] == 'OTHER']
+    assert len(scored) == 1
+    assert scored['Evaluable'].iloc[0] == False
+    assert pd.isna(scored['Positive Response'].iloc[0])
+    assert 'No replicate rows' in scored['Not Evaluable Reason'].iloc[0]
 
   def test_analyze_plate_with_numerical_stimuli(self, analyzer):
     # Test with numerical stimuli values like 4990.67
@@ -312,6 +303,137 @@ class TestIntegration:
     assert any('DMSO' in stimulus for stimulus in unique_stimuli)
     assert 'PHA' in unique_stimuli
 
+
+def multiplex_donor_data():
+  """Three channels with Totals, exact doubles and the exact triple."""
+  populations = [
+    'LED490 Total', 'LED550 Total', 'LED640 Total',
+    'LED490+LED550', 'LED490+LED550+LED640',
+  ]
+  stimuli = ['DMSO'] * 3 + ['PHA'] * 3
+  counts = {
+    'LED490 Total': [10, 12, 11, 60, 65, 62],
+    'LED550 Total': [8, 9, 7, 40, 44, 42],
+    'LED640 Total': [3, 4, 2, 6, 5, 7],
+    'LED490+LED550': [0, 1, 0, 25, 30, 28],
+    'LED490+LED550+LED640': [0, 0, 0, 0, 0, 0],
+  }
+  frames = []
+  for population in populations:
+    frames.append(pd.DataFrame({
+      'Layout-Donor': ['D001'] * 6,
+      'Plate': ['plate_1'] * 6,
+      'Layout-Stimuli': stimuli,
+      'Spot Forming Units (SFU)': counts[population],
+      'Analyte Secreting Population': [population] * 6,
+    }))
+  return pd.concat(frames, ignore_index=True)
+
+
+def multiplex_config(populations=None):
+  return AnalysisConfig(
+    cells_per_well=200000,
+    sfc_cutoff=20,
+    control_stim='DMSO',
+    cytokines={'IFNg': 'LED490', 'IL-10': 'LED550', 'IL-17': 'LED640'},
+    plates={'plate_1': 'S. pneumoniae'},
+    populations=populations,
+  )
+
+
+class TestPopulationEndpoints:
+  def test_default_selection_analyzes_totals_only(self):
+    results = FluoroSpotAnalyzer(multiplex_config()).analyze_donor_data(
+      [('D001', multiplex_donor_data())]
+    )
+    assert sorted(results['Population'].unique()) == [
+      'LED490 Total', 'LED550 Total', 'LED640 Total'
+    ]
+    assert sorted(results['Cytokine'].unique()) == ['IFNg', 'IL-10', 'IL-17']
+
+  def test_exact_double_and_triple_are_separate_endpoints(self):
+    config = multiplex_config(['LED490 Total', 'LED490+LED550', 'LED490+LED550+LED640'])
+    results = FluoroSpotAnalyzer(config).analyze_donor_data([('D001', multiplex_donor_data())])
+
+    pha = results[results['Stimulus'] == 'PHA'].set_index('Population')
+    assert set(pha.index) == {'LED490 Total', 'LED490+LED550', 'LED490+LED550+LED640'}
+    assert pha.loc['LED490+LED550', 'Cytokine'] == 'IFNg + IL-10 only'
+    assert pha.loc['LED490+LED550', 'Population Scope'] == 'Exact double-secretors'
+    assert pha.loc['LED490+LED550+LED640', 'Cytokine'] == 'IFNg + IL-10 + IL-17 only'
+
+    # Each endpoint uses only its own population rows - no summing, no double counting
+    assert pha.loc['LED490 Total', 'Average'] == pytest.approx((60 + 65 + 62) / 3)
+    assert pha.loc['LED490+LED550', 'Average'] == pytest.approx((25 + 30 + 28) / 3)
+
+    # The measured all-zero triple is reported as a real negative, not skipped
+    assert pha.loc['LED490+LED550+LED640', 'Evaluable'] == True
+    assert pha.loc['LED490+LED550+LED640', 'Positive Response'] == False
+    assert pha.loc['LED490+LED550', 'Positive Response'] == True
+
+  def test_selection_alone_is_not_positivity(self):
+    config = multiplex_config(['LED640 Total'])
+    results = FluoroSpotAnalyzer(config).analyze_donor_data([('D001', multiplex_donor_data())])
+    pha = results[results['Stimulus'] == 'PHA'].iloc[0]
+    # Selected and present, but the criterion is not met
+    assert pha['Population'] == 'LED640 Total'
+    assert pha['Positive Response'] == False
+
+  def test_unavailable_population_is_reported_not_scored(self):
+    config = multiplex_config(['LED490 Total', 'LED550+LED640'])
+    analyzer = FluoroSpotAnalyzer(config)
+    results = analyzer.analyze_donor_data([('D001', multiplex_donor_data())])
+
+    assert set(results['Population'].unique()) == {'LED490 Total'}
+    assert len(analyzer.population_problems) == 1
+    assert 'LED550+LED640' in analyzer.population_problems[0]
+
+  def test_missing_counts_are_not_negatives(self):
+    data = multiplex_donor_data()
+    missing = (data['Analyte Secreting Population'] == 'LED490+LED550') & (data['Layout-Stimuli'] == 'PHA')
+    data.loc[missing, 'Spot Forming Units (SFU)'] = np.nan
+
+    config = multiplex_config(['LED490+LED550'])
+    results = FluoroSpotAnalyzer(config).analyze_donor_data([('D001', data)])
+    pha = results[results['Stimulus'] == 'PHA'].iloc[0]
+
+    assert pha['Measured Replicates'] == 0
+    assert pha['Missing SFU Values'] == 3
+    assert pha['Evaluable'] == False
+    assert pd.isna(pha['Positive Response'])
+    assert 'missing' in pha['Not Evaluable Reason']
+
+  def test_partial_missing_counts_are_excluded_from_statistics(self):
+    data = multiplex_donor_data()
+    target = (data['Analyte Secreting Population'] == 'LED490 Total') & (data['Layout-Stimuli'] == 'PHA')
+    indexes = data[target].index
+    data.loc[indexes[0], 'Spot Forming Units (SFU)'] = np.nan
+
+    results = FluoroSpotAnalyzer(multiplex_config(['LED490 Total'])).analyze_donor_data([('D001', data)])
+    pha = results[results['Stimulus'] == 'PHA'].iloc[0]
+
+    assert pha['Measured Replicates'] == 2
+    assert pha['Missing SFU Values'] == 1
+    assert pha['Evaluable'] == True
+    assert pha['SI'] == pytest.approx(((65 + 62) / 2) / 11.0)
+
+  def test_control_matching_is_literal_not_regex(self):
+    data = multiplex_donor_data()
+    data['Layout-Stimuli'] = data['Layout-Stimuli'].replace({'DMSO': 'DMSO(1)'})
+
+    literal = multiplex_config(['LED490 Total'])
+    literal.control_stim = 'DMSO(1)'
+    results = FluoroSpotAnalyzer(literal).analyze_donor_data([('D001', data)])
+    pha = results[results['Stimulus'] == 'PHA'].iloc[0]
+    assert pha['Control Measured Replicates'] == 3
+    assert pha['Evaluable'] == True
+
+    # A regex-looking control name must not match a different stimulus name
+    regexish = multiplex_config(['LED490 Total'])
+    regexish.control_stim = 'D.SO(1)'
+    results = FluoroSpotAnalyzer(regexish).analyze_donor_data([('D001', data)])
+    scored = results[results['Stimulus'] == 'PHA'].iloc[0]
+    assert scored['Control Measured Replicates'] == 0
+    assert scored['Evaluable'] == False
 
 if __name__ == '__main__':
   pytest.main([__file__])

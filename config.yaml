@@ -17,6 +17,26 @@ cytokines:
   IL-10: LED550
   IL-17: LED640
 
+# Populations (endpoints) to analyze (optional)
+#
+# Each entry must be an exported "Analyte Secreting Population" label, exactly as it
+# appears in the Mabtech export. Every selected population is analyzed separately with
+# the same positivity criterion; overlapping populations are never added together.
+#   LED490 Total          -> that cytokine with or without the others (co-secretors included)
+#   LED490 Single         -> single-secretors only
+#   LED490+LED550         -> exact double-secretors (the third channel is absent)
+#   LED490+LED550+LED640  -> exact triple-secretors
+# Omit this section to keep the previous behavior: one Total per cytokine above.
+# Populations the data does not contain are reported and skipped, never scored as
+# negative. Run `python3 fluorospot_analysis.py -a <file.xlsx> -l` to list what a file has.
+#
+# populations:
+#   - LED490 Total
+#   - LED550 Total
+#   - LED640 Total
+#   - LED490+LED550
+#   - LED490+LED550+LED640
+
 # Plate to spacies mapping
 # Format: plate label in Mabtech (case sensitive, so has to be EXACTLY as labeled in the software) to the corresponding species being tested on
 plates:

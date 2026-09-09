@@ -224,6 +224,20 @@ class FluoroSpotGUI:
     # Store validation state for later use
     self.file_has_critical_errors = has_critical_errors
     self.file_has_warnings = has_warnings
+
+    # Discover the populations this data actually exports
+    if not has_critical_errors:
+      inventory, population_messages = self.controller.discover_populations(file_path, is_directory)
+      self.config_panel.set_population_inventory(inventory)
+      for message in population_messages:
+        level = 'info'
+        if message.startswith('✅'):
+          level = 'success'
+        elif message.startswith('⚠️'):
+          level = 'warning'
+        elif message.startswith('❌'):
+          level = 'error'
+        self.add_status_message(message, level)
     
     if has_critical_errors:
       self.add_status_message("❌ Critical errors found in input file. Cannot run analysis.", "error")
@@ -351,6 +365,11 @@ class FluoroSpotGUI:
         config_data = self.config_builder.load_config(filename)
         self.config_panel.set_configuration(config_data)
         self.add_status_message(f"✅ Configuration loaded from {filename}", "success")
+        unavailable = self.config_panel.unavailable_populations()
+        if unavailable:
+          self.add_status_message(
+            "⚠️ Population(s) in the configuration are not present in the selected data and "
+            f"will not be analyzed: {', '.join(unavailable)}", "warning")
     except Exception as e:
       self.add_status_message(f"❌ Failed to load configuration: {str(e)}", "error")
   

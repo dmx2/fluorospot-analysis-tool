@@ -447,7 +447,7 @@ class ExperimentalConditionsWidget(ttk.Frame):
     }
     
     # Bind plate ID changes
-    plate_id_var.trace('w', lambda *args: self.on_plate_id_changed(plate_id, plate_id_var.get()))
+    plate_id_var.trace_add('write', lambda *args: self.on_plate_id_changed(plate_id, plate_id_var.get()))
     
     # Add default group
     self.add_group(plate_id, groups_frame)

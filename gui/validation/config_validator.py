@@ -4,11 +4,13 @@ import re
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
 
+from populations import LED_PATTERN, MULTI_SCOPES, SCOPE_UNKNOWN, parse_population_label
+
 
 class ConfigValidator:
   """Validator for FluoroSpot analysis configuration."""
   
-  LED_PATTERN = re.compile(r'^LED\d{3}$')
+  LED_PATTERN = LED_PATTERN
   FILENAME_PATTERN = re.compile(r'^[^<>:"/\\|?*]+$')  # Valid filename characters
   
   def __init__(self):
@@ -30,6 +32,11 @@ class ConfigValidator:
     # Validate experimental conditions
     if not self.validate_experimental_conditions(config):
       valid = False
+
+    # Validate selected populations
+    if not self.validate_populations(config):
+      valid = False
+
     
     # Validate output settings
     if not self.validate_output_settings(config):
@@ -37,6 +44,33 @@ class ConfigValidator:
     
     return valid, self.validation_results
   
+  def validate_populations(self, config: Dict[str, Any]) -> bool:
+    """Validate the selected population endpoints."""
+    populations = config.get('populations') or []
+    if not populations:
+      self.validation_results.append(
+        "ℹ️ No population selection: analyzing one Total per configured cytokine (default)"
+      )
+      return True
+
+    specs = [parse_population_label(label) for label in populations]
+    unknown = [spec.label for spec in specs if spec.scope == SCOPE_UNKNOWN]
+    if unknown:
+      self.validation_results.append(
+        f"⚠️ Unrecognized population label(s) kept as-is: {', '.join(unknown)}"
+      )
+
+    multi = [spec for spec in specs if spec.scope in MULTI_SCOPES]
+    if multi and not config.get('mapping_confirmed', False):
+      self.validation_results.append(
+        "⚠️ Cytokine/LED mapping is not confirmed; exact double/triple labels are unverified"
+      )
+
+    self.validation_results.append(
+      f"✅ {len(populations)} population endpoint(s) selected, {len(multi)} exact multi-secretor"
+    )
+    return True
+
   def validate_basic_settings(self, config: Dict[str, Any]) -> bool:
     """Validate basic configuration settings."""
     valid = True
@@ -354,6 +388,21 @@ class ConfigValidator:
       matching_leds = config_leds & data_leds
       if matching_leds:
         results.append(f"✅ Matching LEDs: {', '.join(matching_leds)}")
+
+    # Check selected populations exist in the data
+    if config.get('populations') and 'led_populations' in data_summary:
+      data_populations = {str(pop) for pop in data_summary['led_populations']}
+      selected = [str(label) for label in config['populations']]
+      absent = [label for label in selected if label not in data_populations]
+      present = [label for label in selected if label in data_populations]
+      if absent:
+        results.append(
+          f"❌ Selected population(s) not present in data (will be skipped, not scored "
+          f"as negative): {', '.join(absent)}"
+        )
+        valid = False
+      if present:
+        results.append(f"✅ {len(present)} selected population(s) found in data")
     
     return valid, results
   

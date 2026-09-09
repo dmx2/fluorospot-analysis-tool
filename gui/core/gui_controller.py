@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 import traceback
 
 from fluorospot_analysis import FluoroSpotAnalyzer, DataLoader
+from populations import MULTI_SCOPES, discover_populations, merge_inventories
 from gui.validation.data_validator import DataValidator
 from gui.validation.config_validator import ConfigValidator
 from gui.core.config_builder import ConfigBuilder
@@ -127,14 +128,16 @@ class GUIController:
           # Validate config against data
           data_compat_valid, data_results = self.config_validator.validate_config_for_data(config, data_summary)
           all_results.extend(data_results)
-          
+
           # Most data compatibility issues are warnings, not critical errors
           for result in data_results:
             if result.startswith("⚠️"):
               has_warnings = True
             elif result.startswith("❌"):
               # Only complete mismatches are critical
-              if "No matching plates" in result or "Control stimulus" in result and "not found in data" in result:
+              if ("No matching plates" in result
+                  or "not present in data" in result
+                  or ("Control stimulus" in result and "not found in data" in result)):
                 has_critical_errors = True
           
         except Exception as e:
@@ -244,6 +247,10 @@ class GUIController:
       except Exception as e:
         message_queue.put({'type': 'status', 'content': f'❌ Error analyzing donor {donor_id}: {str(e)}', 'level': 'error'})
         continue
+
+      for problem in analyzer.population_problems:
+        message_queue.put({'type': 'status', 'content': f'⚠️ {problem}', 'level': 'warning'})
+      analyzer.population_problems.clear()
     
     # Combine all results
     import pandas as pd
@@ -251,6 +258,17 @@ class GUIController:
       final_results = pd.concat(all_results, ignore_index=True)
       message_queue.put({'type': 'progress', 'value': 85})
       message_queue.put({'type': 'status', 'content': f'Analysis complete. Generated {len(final_results)} result rows.', 'level': 'info'})
+      populations = [str(label) for label in final_results['Population'].dropna().unique() if str(label)]
+      if populations:
+        message_queue.put({'type': 'status',
+                           'content': f'Endpoints analyzed separately: {", ".join(populations)}',
+                           'level': 'info'})
+      not_evaluable = int((final_results.get('Evaluable') == False).sum()) if 'Evaluable' in final_results else 0
+      if not_evaluable:
+        message_queue.put({'type': 'status',
+                           'content': f'⚠️ {not_evaluable} endpoint result(s) were not evaluable '
+                                      '(missing counts are reported, not treated as negatives)',
+                           'level': 'warning'})
       return final_results
     else:
       return pd.DataFrame()
@@ -296,3 +314,55 @@ class GUIController:
       return self.config_validator.suggest_configuration_from_data(data_summary)
     
     return None
+
+  def discover_populations(self, file_path: str, is_directory: bool):
+    """Discover exported populations across the selected file(s).
+
+    Returns (inventory, messages). Every Excel file in a directory is inspected
+    so that populations missing from some files stay visible.
+    """
+    messages = []
+    try:
+      path = Path(file_path)
+      files = []
+      if is_directory:
+        files = sorted(list(path.glob('*.xlsx')) + list(path.glob('*.xls')))
+        files = [f for f in files if not f.name.startswith('~')]
+        if not files:
+          return None, ['❌ No Excel files found for population discovery']
+      else:
+        files = [path]
+
+      import pandas as pd
+      inventories = []
+      for excel_file in files:
+        try:
+          df = pd.read_excel(excel_file, sheet_name=1, engine='openpyxl')
+        except Exception as error:
+          messages.append(f'⚠️ Could not inspect {excel_file.name}: {error}')
+          continue
+        inventories.append(discover_populations(df))
+
+      inventory = merge_inventories(inventories)
+      if not inventory.populations:
+        messages.append('⚠️ No exported populations found in the selected data')
+        return inventory, messages
+
+      multi = [info for info in inventory.populations if info.scope in MULTI_SCOPES]
+      messages.append(
+        f'✅ Discovered {len(inventory.populations)} population(s) across {len(inventories)} file(s); '
+        f'{len(multi)} exact double/triple population(s) available'
+      )
+      if not inventory.has_analyte_metadata:
+        messages.append(
+          '⚠️ The export carries no channel-to-cytokine metadata; confirm the mapping on the '
+          'Populations tab before selecting double/triple endpoints'
+        )
+      incomplete = [info.label for info in inventory.populations
+                    if info.files_present < info.files_total or info.measured == 0]
+      if incomplete:
+        messages.append(f'⚠️ Populations with incomplete coverage: {", ".join(incomplete)}')
+      return inventory, messages
+
+    except Exception as error:
+      return None, [f'❌ Population discovery failed: {error}']

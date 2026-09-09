@@ -3,7 +3,8 @@
 import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any
-import re
+
+from populations import MULTI_SCOPES, SCOPE_TOTAL, discover_populations
 
 
 class DataValidator:
@@ -16,9 +17,7 @@ class DataValidator:
     'Spot Forming Units (SFU)',
     'Analyte Secreting Population'
   ]
-  
-  LED_PATTERN = re.compile(r'LED\d{3} Total')
-  
+
   def __init__(self):
     self.validation_results = []
   
@@ -224,16 +223,32 @@ class DataValidator:
         self.validation_results.append(f"❌ No valid SFU values found")
         valid = False
     
-    # Check Analyte Secreting Population column (LED format)
+    # Check Analyte Secreting Population column against the shared discovery
     if 'Analyte Secreting Population' in df.columns:
-      unique_populations = df['Analyte Secreting Population'].dropna().unique()
-      led_populations = [pop for pop in unique_populations if self.LED_PATTERN.match(str(pop))]
-      
-      if not led_populations:
-        self.validation_results.append(f"⚠️ No LED populations found (expected format: 'LED### Total')")
-        # Don't mark as invalid - this is just a warning
+      inventory = discover_populations(df)
+      totals = [info.label for info in inventory.populations if info.scope == SCOPE_TOTAL]
+      multi = [info.label for info in inventory.populations if info.scope in MULTI_SCOPES]
+
+      if not inventory.populations:
+        self.validation_results.append("⚠️ No populations found in 'Analyte Secreting Population'")
       else:
-        self.validation_results.append(f"✅ Found LED populations: {', '.join(led_populations)}")
+        self.validation_results.append(
+          f"✅ Found {len(inventory.populations)} population(s); channels: "
+          f"{', '.join(inventory.channels) or 'none recognized'}"
+        )
+        if totals:
+          self.validation_results.append(f"✅ Cytokine totals available: {', '.join(totals)}")
+        else:
+          self.validation_results.append("⚠️ No 'LED### Total' populations found")
+        if multi:
+          self.validation_results.append(f"✅ Exact double/triple populations available: {', '.join(multi)}")
+        else:
+          self.validation_results.append("⚠️ No exact double/triple populations exported in this data")
+        incomplete = [info.label for info in inventory.populations if info.missing]
+        if incomplete:
+          self.validation_results.append(
+            f"⚠️ Populations with missing (not zero) SFU counts: {', '.join(incomplete)}"
+          )
     
     return valid
   
@@ -344,6 +359,16 @@ class DataValidator:
     if 'Analyte Secreting Population' in df.columns:
       populations = df['Analyte Secreting Population'].dropna().unique()
       summary['led_populations'] = [pop for pop in populations if 'LED' in str(pop)]
+      summary['population_details'] = [
+        {
+          'label': info.label,
+          'scope': info.scope,
+          'rows': info.rows,
+          'measured': info.measured,
+          'missing': info.missing,
+        }
+        for info in discover_populations(df).populations
+      ]
     
     if 'Spot Forming Units (SFU)' in df.columns:
       sfu_values = pd.to_numeric(df['Spot Forming Units (SFU)'], errors='coerce').dropna()

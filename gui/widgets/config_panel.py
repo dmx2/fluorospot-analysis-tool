@@ -7,6 +7,8 @@ from pathlib import Path
 import os
 
 from gui.widgets.dynamic_lists import CytokineListWidget, PlateListWidget, ExperimentalConditionsWidget
+from gui.widgets.population_selector import PopulationSelectorWidget
+from populations import channel_names_from_cytokines
 
 
 class ConfigPanel(ttk.Frame):
@@ -32,6 +34,7 @@ class ConfigPanel(ttk.Frame):
     # Create tabs
     self.create_basic_settings_tab()
     self.create_cytokines_tab()
+    self.create_populations_tab()
     self.create_plates_tab()
     self.create_experimental_tab()
     self.create_output_tab()
@@ -87,9 +90,9 @@ class ConfigPanel(ttk.Frame):
     self.create_validation_indicators(basic_frame)
     
     # Bind validation events
-    self.cells_per_well_var.trace('w', lambda *args: self.validate_basic_settings())
-    self.sfc_cutoff_var.trace('w', lambda *args: self.validate_basic_settings())
-    self.control_stim_var.trace('w', lambda *args: self.validate_basic_settings())
+    self.cells_per_well_var.trace_add('write', lambda *args: self.validate_basic_settings())
+    self.sfc_cutoff_var.trace_add('write', lambda *args: self.validate_basic_settings())
+    self.control_stim_var.trace_add('write', lambda *args: self.validate_basic_settings())
   
   def create_validation_indicators(self, parent):
     """Create validation status indicators."""
@@ -131,6 +134,31 @@ class ConfigPanel(ttk.Frame):
     self.cytokine_widget = CytokineListWidget(cytokines_frame, self.on_config_changed)
     self.cytokine_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
   
+  def create_populations_tab(self):
+    """Create the file-driven population (endpoint) selection tab."""
+    populations_frame = ttk.Frame(self.notebook, padding="10")
+    self.notebook.add(populations_frame, text="Populations")
+
+    populations_frame.columnconfigure(0, weight=1)
+    populations_frame.rowconfigure(0, weight=1)
+
+    self.population_widget = PopulationSelectorWidget(populations_frame, self.on_populations_changed)
+    self.population_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+  def on_populations_changed(self, labels=None):
+    """Population selection changed."""
+    self.on_config_changed()
+
+  def set_population_inventory(self, inventory):
+    """Install populations discovered in the currently selected input data."""
+    self.population_widget.set_inventory(
+      inventory, channel_names_from_cytokines(self.cytokine_widget.get_cytokine_dict())
+    )
+
+  def unavailable_populations(self):
+    """Populations requested by a loaded config but absent from the data."""
+    return list(self.population_widget.dropped_labels)
+
   def create_plates_tab(self):
     """Create the plates mapping tab."""
     plates_frame = ttk.Frame(self.notebook, padding="10")
@@ -203,8 +231,8 @@ class ConfigPanel(ttk.Frame):
     self.output_msg.grid(row=2, column=1, sticky=tk.W, pady=(10, 0))
     
     # Bind validation
-    self.output_dir_var.trace('w', lambda *args: self.validate_output_settings())
-    self.results_filename_var.trace('w', lambda *args: self.validate_output_settings())
+    self.output_dir_var.trace_add('write', lambda *args: self.validate_output_settings())
+    self.results_filename_var.trace_add('write', lambda *args: self.validate_output_settings())
   
   def browse_output_directory(self):
     """Browse for output directory."""
@@ -331,11 +359,19 @@ class ConfigPanel(ttk.Frame):
       'results_filename': self.results_filename_var.get().strip()
     }
     
+    # Keep the population selector labels in step with the cytokine mapping
+    self.population_widget.set_channel_names(channel_names_from_cytokines(config['cytokines']))
+
+    populations = self.population_widget.get_selected_labels()
+    if populations:
+      config['populations'] = populations
+    config['mapping_confirmed'] = self.population_widget.mapping_confirmed()
+
     # Add experimental conditions if enabled
     exp_conditions = self.experimental_widget.get_configuration()
     if exp_conditions:
       config['experimental_conditions'] = exp_conditions
-    
+
     return config
   
   def set_configuration(self, config: Dict[str, Any]):
@@ -353,6 +389,9 @@ class ConfigPanel(ttk.Frame):
       self.cytokine_widget.set_cytokine_dict(config['cytokines'])
     if 'plates' in config:
       self.plate_widget.set_plate_dict(config['plates'])
+
+    # Selected populations (applied once the input data has been discovered)
+    self.population_widget.set_selected_labels(config.get('populations'))
     
     # Experimental conditions
     if 'experimental_conditions' in config:
@@ -396,6 +435,7 @@ class ConfigPanel(ttk.Frame):
     # Reset mappings
     self.cytokine_widget.reset()
     self.plate_widget.reset()
+    self.population_widget.reset()
     
     # Reset experimental conditions
     self.experimental_widget.reset()
@@ -420,6 +460,7 @@ class ConfigPanel(ttk.Frame):
     # Mappings
     self.cytokine_widget.set_enabled(enabled)
     self.plate_widget.set_enabled(enabled)
+    self.population_widget.set_enabled(enabled)
     
     # Experimental conditions
     self.experimental_widget.set_enabled(enabled)

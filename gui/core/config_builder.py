@@ -29,7 +29,10 @@ class ConfigBuilder:
     
     # Extract experimental conditions (if any)
     experimental_conditions = gui_config.get('experimental_conditions')
-    
+
+    # Selected populations (empty keeps the historical cytokine-Totals default)
+    populations = gui_config.get('populations') or None
+
     # Create AnalysisConfig object
     analysis_config = AnalysisConfig(
       cells_per_well=cells_per_well,
@@ -37,7 +40,8 @@ class ConfigBuilder:
       control_stim=control_stim,
       cytokines=cytokines,
       plates=plates,
-      experimental_conditions=experimental_conditions
+      experimental_conditions=experimental_conditions,
+      populations=populations
     )
     
     return analysis_config
@@ -53,6 +57,10 @@ class ConfigBuilder:
       'cytokines': gui_config.get('cytokines', {}),
       'plates': gui_config.get('plates', {})
     }
+    populations = gui_config.get('populations')
+    if populations:
+      yaml_config['populations'] = list(populations)
+
     
     # Add experimental conditions if present
     exp_conditions = gui_config.get('experimental_conditions')
@@ -87,6 +95,10 @@ class ConfigBuilder:
       'cytokines': gui_config.get('cytokines', {}),
       'plates': gui_config.get('plates', {})
     }
+    populations = gui_config.get('populations')
+    if populations:
+      yaml_config['populations'] = list(populations)
+
     
     # Add experimental conditions if present
     exp_conditions = gui_config.get('experimental_conditions')
@@ -121,6 +133,11 @@ class ConfigBuilder:
     # Add experimental conditions if present
     if 'experimental_conditions' in yaml_config:
       gui_config['experimental_conditions'] = yaml_config['experimental_conditions']
+
+    # Selected populations (endpoints); absent means cytokine Totals only
+    if yaml_config.get('populations'):
+      gui_config['populations'] = list(yaml_config['populations'])
+
     
     return gui_config
   
