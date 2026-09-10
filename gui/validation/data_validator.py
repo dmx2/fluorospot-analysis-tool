@@ -20,75 +20,90 @@ class DataValidator:
 
   def __init__(self):
     self.validation_results = []
-  
+    # Problems that make the data unusable, phrased as something the user can act on.
+    self.blocking_problems = []
+
+  def block(self, problem: str):
+    """Record an actionable problem that prevents the analysis from running."""
+    self.validation_results.append(f"❌ {problem}")
+    if problem not in self.blocking_problems:
+      self.blocking_problems.append(problem)
+
   def validate_file(self, file_path: Path) -> Tuple[bool, List[str]]:
     """Validate a single Excel file."""
     self.validation_results = []
-    
+    self.blocking_problems = []
+
     try:
       # Check file existence and extension
       if not file_path.exists():
-        self.validation_results.append(f"❌ File does not exist: {file_path}")
+        self.block(f"File does not exist: {file_path}. Select the exported Excel workbook again.")
         return False, self.validation_results
-      
+
       if file_path.suffix.lower() not in ['.xlsx', '.xls']:
         self.validation_results.append(f"⚠️ File is not an Excel file: {file_path}")
-      
-      # Try to read the Excel file
+
+      # The analysis reads the second worksheet (the plate database), so validate
+      # exactly that sheet instead of silently checking a different one.
       try:
         df = pd.read_excel(file_path, sheet_name=1, engine='openpyxl')
         self.validation_results.append(f"✅ Successfully loaded Excel file (sheet 1)")
       except Exception as e:
-        try:
-          # Try sheet 0 if sheet 1 fails
-          df = pd.read_excel(file_path, sheet_name=0, engine='openpyxl')
-          self.validation_results.append(f"⚠️ Using sheet 0 instead of sheet 1")
-        except Exception as e2:
-          self.validation_results.append(f"❌ Cannot read Excel file: {str(e)}")
-          return False, self.validation_results
-      
+        self.block(f"The second worksheet (plate database) of '{file_path.name}' could not be "
+                   f"read ({e}). Export the plate again from Mabtech Apex so the workbook keeps "
+                   f"its plate-database sheet; the analysis reads that sheet.")
+        return False, self.validation_results
+
       # Validate DataFrame structure
       return self.validate_dataframe(df, str(file_path))
-      
+
     except Exception as e:
-      self.validation_results.append(f"❌ Validation error: {str(e)}")
+      self.block(f"The file could not be validated ({e}). Check that '{file_path.name}' is a "
+                 f"Mabtech Apex Excel export.")
       return False, self.validation_results
   
   def validate_directory(self, directory: Path) -> Tuple[bool, List[str]]:
     """Validate a directory containing Excel files."""
     self.validation_results = []
-    
+    self.blocking_problems = []
+
     if not directory.exists():
-      self.validation_results.append(f"❌ Directory does not exist: {directory}")
+      self.block(f"Directory does not exist: {directory}. Select the folder with the exports again.")
       return False, self.validation_results
-    
+
     if not directory.is_dir():
-      self.validation_results.append(f"❌ Path is not a directory: {directory}")
+      self.block(f"'{directory}' is a file, not a folder. Switch the input type to 'Single file' "
+                 f"or choose a folder.")
       return False, self.validation_results
-    
-    # Find Excel files
-    excel_files = list(directory.glob("*.xlsx")) + list(directory.glob("*.xls"))
-    
+
+    # Find Excel files (deterministic order so every run reports the same thing)
+    excel_files = sorted(set(directory.glob("*.xlsx")) | set(directory.glob("*.xls")))
+
     # Filter out temporary files
     excel_files = [f for f in excel_files if not f.name.startswith('~')]
-    
+
     if not excel_files:
-      self.validation_results.append(f"❌ No Excel files found in directory: {directory}")
+      self.block(f"No Excel exports found in {directory}. Choose a folder containing the "
+                 f".xlsx exports, or switch to 'Single file'.")
       return False, self.validation_results
-    
+
     self.validation_results.append(f"✅ Found {len(excel_files)} Excel file(s)")
-    
+
     # Do lightweight validation of each file (just basic checks, no full data loading)
     all_valid = True
     for excel_file in excel_files:
       file_valid, file_results = self.validate_file_lightweight(excel_file)
       if not file_valid:
         all_valid = False
-      
+        self.blocking_problems.append(
+          f"'{excel_file.name}' cannot be read as an Excel export. Remove it from the folder "
+          f"or replace it with a valid Mabtech Apex export."
+        )
+
       # Add file-specific results with filename prefix
       for result in file_results:
         self.validation_results.append(f"  {excel_file.name}: {result}")
-    
+
     return all_valid, self.validation_results
   
   def validate_file_lightweight(self, file_path: Path) -> Tuple[bool, List[str]]:
@@ -137,7 +152,8 @@ class DataValidator:
     
     # Check if DataFrame is empty
     if df.empty:
-      self.validation_results.append(f"❌ DataFrame is empty")
+      self.block("The plate-database worksheet has no rows. Re-export the plate from Mabtech "
+                 "Apex; there is nothing to analyze.")
       return False, self.validation_results
     
     self.validation_results.append(f"✅ DataFrame has {len(df)} rows and {len(df.columns)} columns")
@@ -155,7 +171,9 @@ class DataValidator:
       missing_non_critical = [col for col in missing_columns if col not in critical_columns]
       
       if missing_critical:
-        self.validation_results.append(f"❌ Missing critical required columns: {', '.join(missing_critical)}")
+        self.block(f"The export is missing the column(s) the analysis needs: "
+                   f"{', '.join(missing_critical)}. Re-export the plate database from Mabtech "
+                   f"Apex with those columns included.")
         valid = False
       
       if missing_non_critical:
@@ -178,7 +196,8 @@ class DataValidator:
     if 'Layout-Donor' in df.columns:
       unique_donors = df['Layout-Donor'].dropna().unique()
       if len(unique_donors) == 0:
-        self.validation_results.append(f"❌ No donor IDs found")
+        self.block("No donor IDs in 'Layout-Donor'. Fill in the donor layout in Mabtech Apex "
+                   "and export again; results are grouped per donor.")
         valid = False
       else:
         self.validation_results.append(f"✅ Found {len(unique_donors)} unique donor(s): {', '.join(map(str, unique_donors))}")
@@ -187,7 +206,8 @@ class DataValidator:
     if 'Plate' in df.columns:
       unique_plates = df['Plate'].dropna().unique()
       if len(unique_plates) == 0:
-        self.validation_results.append(f"❌ No plate IDs found")
+        self.block("No plate labels in the 'Plate' column. Re-export the plate database from "
+                   "Mabtech Apex.")
         valid = False
       else:
         self.validation_results.append(f"✅ Found {len(unique_plates)} unique plate(s): {', '.join(map(str, unique_plates))}")
@@ -196,7 +216,8 @@ class DataValidator:
     if 'Layout-Stimuli' in df.columns:
       unique_stimuli = df['Layout-Stimuli'].dropna().unique()
       if len(unique_stimuli) == 0:
-        self.validation_results.append(f"❌ No stimuli found")
+        self.block("No stimuli in 'Layout-Stimuli'. Fill in the stimulus layout in Mabtech Apex "
+                   "and export again.")
         valid = False
       else:
         self.validation_results.append(f"✅ Found {len(unique_stimuli)} unique stimuli")
@@ -220,7 +241,8 @@ class DataValidator:
       if len(valid_sfu_values) > 0:
         self.validation_results.append(f"✅ SFU values range: {valid_sfu_values.min():.1f} - {valid_sfu_values.max():.1f}")
       else:
-        self.validation_results.append(f"❌ No valid SFU values found")
+        self.block("The 'Spot Forming Units (SFU)' column has no numeric counts, so nothing can "
+                   "be analyzed. Check that the plate was counted before exporting.")
         valid = False
     
     # Check Analyte Secreting Population column against the shared discovery
@@ -359,6 +381,10 @@ class DataValidator:
     if 'Analyte Secreting Population' in df.columns:
       populations = df['Analyte Secreting Population'].dropna().unique()
       summary['led_populations'] = [pop for pop in populations if 'LED' in str(pop)]
+      inventory = discover_populations(df)
+      # Canonical labels, exactly as the Populations tab offers them, so that a
+      # selection is never reported as absent because of label formatting.
+      summary['population_labels'] = inventory.labels
       summary['population_details'] = [
         {
           'label': info.label,
@@ -367,7 +393,7 @@ class DataValidator:
           'measured': info.measured,
           'missing': info.missing,
         }
-        for info in discover_populations(df).populations
+        for info in inventory.populations
       ]
     
     if 'Spot Forming Units (SFU)' in df.columns:

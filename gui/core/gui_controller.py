@@ -3,15 +3,49 @@
 import sys
 import threading
 import queue
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import traceback
 
+import pandas as pd
+
 from fluorospot_analysis import FluoroSpotAnalyzer, DataLoader
-from populations import MULTI_SCOPES, discover_populations, merge_inventories
+from populations import (
+  MULTI_SCOPES,
+  PopulationInventory,
+  discover_populations,
+  merge_inventories,
+)
 from gui.validation.data_validator import DataValidator
 from gui.validation.config_validator import ConfigValidator
 from gui.core.config_builder import ConfigBuilder
+
+
+@dataclass
+class ValidationOutcome:
+  """Result of one validation pass.
+
+  `blocking` holds the problems that genuinely prevent the analysis from
+  producing results, each already phrased as an instruction the user can follow.
+  """
+  messages: List[str] = field(default_factory=list)
+  blocking: List[str] = field(default_factory=list)
+  has_warnings: bool = False
+
+  @property
+  def has_critical_errors(self) -> bool:
+    return bool(self.blocking)
+
+
+@dataclass
+class InputSummary:
+  """What the selected file/directory actually contains."""
+  files: List[Path] = field(default_factory=list)
+  inventory: Optional[PopulationInventory] = None
+  data_summary: Dict[str, Any] = field(default_factory=dict)
+  messages: List[str] = field(default_factory=list)
+  blocking: List[str] = field(default_factory=list)
 
 
 class GUIController:
@@ -23,133 +57,156 @@ class GUIController:
     self.config_builder = ConfigBuilder()
     self.current_analysis_thread = None
     self.cancel_requested = False
-  
-  def validate_input_path(self, file_path: str, is_directory: bool) -> tuple[bool, bool, list[str]]:
-    """Validate the input file or directory.
-    
-    Returns:
-      tuple: (has_critical_errors, has_warnings, validation_messages)
+    self._input_cache = {}
+
+  def excel_files(self, file_path: str, is_directory: bool) -> List[Path]:
+    """Every export the analysis will read, in a deterministic order."""
+    path = Path(file_path)
+    if not is_directory:
+      return [path]
+    files = sorted(set(path.glob('*.xlsx')) | set(path.glob('*.xls')))
+    return [f for f in files if not f.name.startswith('~')]
+
+  def read_input(self, file_path: str, is_directory: bool) -> InputSummary:
+    """Inspect every selected export once and summarize all of them together.
+
+    Population discovery and configuration validation must agree, so both use
+    this union of the whole selection instead of one arbitrary sample file.
     """
-    
+    files = self.excel_files(file_path, is_directory)
+    fingerprint = (str(file_path), is_directory, tuple(
+      (str(f), f.stat().st_mtime_ns, f.stat().st_size) if f.exists() else (str(f), 0, 0)
+      for f in files
+    ))
+    cached = self._input_cache.get(fingerprint)
+    if cached is not None:
+      return cached
+
+    summary = InputSummary(files=files)
+    if not files:
+      summary.blocking.append(
+        f'No Excel exports found in {file_path}. Choose a folder containing the .xlsx '
+        f'exports, or switch to "Single file".'
+      )
+      summary.messages.append(f'❌ {summary.blocking[-1]}')
+      self._input_cache[fingerprint] = summary
+      return summary
+
+    inventories = []
+    per_file_summaries = []
+    for excel_file in files:
+      try:
+        df = pd.read_excel(excel_file, sheet_name=1, engine='openpyxl')
+      except Exception as error:
+        summary.messages.append(f'⚠️ Could not inspect {excel_file.name}: {error}')
+        continue
+      inventories.append(discover_populations(df))
+      per_file_summaries.append(self.data_validator.get_data_summary(df))
+
+    if not per_file_summaries:
+      summary.blocking.append(
+        'None of the selected export(s) could be read. Re-export the plate database from '
+        'Mabtech Apex and select it again.'
+      )
+      summary.messages.append(f'❌ {summary.blocking[-1]}')
+      self._input_cache[fingerprint] = summary
+      return summary
+
+    summary.inventory = merge_inventories(inventories)
+    summary.data_summary = self.merge_data_summaries(per_file_summaries, summary.inventory)
+    self._input_cache[fingerprint] = summary
+    return summary
+
+  def merge_data_summaries(
+    self, summaries: List[Dict[str, Any]], inventory: PopulationInventory
+  ) -> Dict[str, Any]:
+    """Union of every inspected file, so nothing present is reported as absent."""
+    merged: Dict[str, Any] = {
+      'total_rows': sum(int(s.get('total_rows', 0)) for s in summaries),
+      'files': len(summaries),
+    }
+    for key in ('donors', 'plates', 'stimuli', 'led_populations'):
+      values = []
+      for summary in summaries:
+        for value in summary.get(key, []):
+          if value not in values:
+            values.append(value)
+      if values:
+        merged[key] = values
+
+    if inventory is not None and inventory.populations:
+      merged['population_labels'] = inventory.labels
+      merged['population_details'] = [
+        {
+          'label': info.label,
+          'scope': info.scope,
+          'rows': info.rows,
+          'measured': info.measured,
+          'missing': info.missing,
+        }
+        for info in inventory.populations
+      ]
+    return merged
+
+  def validate_input_path(self, file_path: str, is_directory: bool) -> ValidationOutcome:
+    """Validate the input file or directory."""
+
     try:
       path = Path(file_path)
-      
+
       if is_directory:
-        valid, results = self.data_validator.validate_directory(path)
+        _, results = self.data_validator.validate_directory(path)
       else:
-        valid, results = self.data_validator.validate_file(path)
-      
-      # Analyze results to distinguish critical errors from warnings
-      has_critical_errors = False
-      has_warnings = False
-      
-      for result in results:
-        if result.startswith("❌"):
-          # Check if this is a critical error that should prevent analysis
-          critical_errors = [
-            "does not exist",
-            "Cannot read Excel file",
-            "DataFrame is empty",
-            "Missing required columns",
-            "No valid SFU values found"
-          ]
-          if any(error in result for error in critical_errors):
-            has_critical_errors = True
-        elif result.startswith("⚠️"):
-          has_warnings = True
-      
-      return has_critical_errors, has_warnings, results
-      
+        _, results = self.data_validator.validate_file(path)
+
+      return ValidationOutcome(
+        messages=results,
+        blocking=list(self.data_validator.blocking_problems),
+        has_warnings=any(result.startswith("⚠️") for result in results),
+      )
+
     except Exception as e:
-      error_msg = f"Validation error: {str(e)}"
-      return True, False, [f"❌ {error_msg}"]
-  
-  def validate_configuration(self, config: Dict[str, Any], file_path: str, is_directory: bool) -> tuple[bool, bool, list[str]]:
-    """Validate the complete configuration including compatibility with data.
-    
-    Returns:
-      tuple: (has_critical_errors, has_warnings, validation_messages)
-    """
-    
+      problem = (f"The selected input could not be validated ({e}). Select the Mabtech Apex "
+                 f"export again.")
+      return ValidationOutcome(messages=[f"❌ {problem}"], blocking=[problem])
+
+  def validate_configuration(self, config: Dict[str, Any], file_path: str,
+                             is_directory: bool) -> ValidationOutcome:
+    """Validate the complete configuration including compatibility with data."""
+
     try:
       all_results = []
-      has_critical_errors = False
-      has_warnings = False
-      
-      # First validate the configuration itself
-      config_valid, config_results = self.config_validator.validate_configuration(config)
-      all_results.extend(config_results)
-      
-      # Analyze config results
-      for result in config_results:
-        if result.startswith("❌"):
-          # Only some config errors are critical
-          critical_config_errors = [
-            "Missing cell count",
-            "Missing SFC cutoff", 
-            "Missing control stimulus",
-            "Missing cytokine mappings",
-            "Missing plate mappings",
-            "Cell count must be positive",
-            "SFC cutoff cannot be negative"
-          ]
-          if any(error in result for error in critical_config_errors):
-            has_critical_errors = True
-        elif result.startswith("⚠️"):
-          has_warnings = True
-      
-      # Then validate against the data
-      if file_path:
-        # Load a sample of the data to check compatibility
-        path = Path(file_path)
-        
-        if is_directory:
-          # Find first Excel file in directory
-          excel_files = list(path.glob("*.xlsx")) + list(path.glob("*.xls"))
-          excel_files = [f for f in excel_files if not f.name.startswith('~')]
-          
-          if excel_files:
-            sample_file = excel_files[0]
-            all_results.append(f"📁 Using sample file: {sample_file.name}")
-          else:
-            all_results.append("❌ No Excel files found in directory")
-            return True, False, all_results
-        else:
-          sample_file = path
-        
-        try:
-          # Load sample data
-          import pandas as pd
-          df = pd.read_excel(sample_file, sheet_name=1, engine='openpyxl')
-          
-          # Get data summary
-          data_summary = self.data_validator.get_data_summary(df)
-          
-          # Validate config against data
-          data_compat_valid, data_results = self.config_validator.validate_config_for_data(config, data_summary)
-          all_results.extend(data_results)
+      blocking = []
 
-          # Most data compatibility issues are warnings, not critical errors
-          for result in data_results:
-            if result.startswith("⚠️"):
-              has_warnings = True
-            elif result.startswith("❌"):
-              # Only complete mismatches are critical
-              if ("No matching plates" in result
-                  or "not present in data" in result
-                  or ("Control stimulus" in result and "not found in data" in result)):
-                has_critical_errors = True
-          
-        except Exception as e:
-          error_msg = f"Error validating against data: {str(e)}"
-          all_results.append(f"⚠️ {error_msg}")
-          has_warnings = True
-      
-      return has_critical_errors, has_warnings, all_results
-      
+      # First validate the configuration itself
+      _, config_results = self.config_validator.validate_configuration(config)
+      all_results.extend(config_results)
+      blocking.extend(self.config_validator.blocking_problems)
+
+      # Then validate against every selected export
+      if file_path:
+        summary = self.read_input(file_path, is_directory)
+        all_results.extend(summary.messages)
+        blocking.extend(summary.blocking)
+
+        if summary.data_summary:
+          if len(summary.files) > 1:
+            all_results.append(f"📁 Checked the configuration against {len(summary.files)} export(s)")
+          _, data_results, data_blocking = self.config_validator.validate_config_for_data(
+            config, summary.data_summary
+          )
+          all_results.extend(data_results)
+          blocking.extend(data_blocking)
+
+      return ValidationOutcome(
+        messages=all_results,
+        blocking=list(dict.fromkeys(blocking)),
+        has_warnings=any(result.startswith("⚠️") for result in all_results),
+      )
+
     except Exception as e:
-      error_msg = f"Configuration validation error: {str(e)}"
-      return True, False, [f"❌ {error_msg}"]
+      problem = f"The configuration could not be validated ({e})."
+      return ValidationOutcome(messages=[f"❌ {problem}"], blocking=[problem])
   
   def run_analysis(self, config: Dict[str, Any], file_path: str, is_directory: bool, message_queue: queue.Queue):
     """Run the FluoroSpot analysis in a background thread."""
@@ -278,29 +335,12 @@ class GUIController:
     self.cancel_requested = True
   
   def get_data_summary(self, file_path: str, is_directory: bool) -> Optional[Dict[str, Any]]:
-    """Get a summary of the data for display purposes."""
-    
+    """Get a summary of the whole selection for display purposes."""
+
     try:
-      path = Path(file_path)
-      
-      if is_directory:
-        # Find first Excel file in directory
-        excel_files = list(path.glob("*.xlsx")) + list(path.glob("*.xls"))
-        excel_files = [f for f in excel_files if not f.name.startswith('~')]
-        
-        if not excel_files:
-          return None
-        
-        sample_file = excel_files[0]
-      else:
-        sample_file = path
-      
-      # Load sample data
-      import pandas as pd
-      df = pd.read_excel(sample_file, sheet_name=1, engine='openpyxl')
-      
-      return self.data_validator.get_data_summary(df)
-      
+      summary = self.read_input(file_path, is_directory)
+      return summary.data_summary or None
+
     except Exception as e:
       print(f"Error getting data summary: {str(e)}")
       return None
@@ -321,36 +361,18 @@ class GUIController:
     Returns (inventory, messages). Every Excel file in a directory is inspected
     so that populations missing from some files stay visible.
     """
-    messages = []
     try:
-      path = Path(file_path)
-      files = []
-      if is_directory:
-        files = sorted(list(path.glob('*.xlsx')) + list(path.glob('*.xls')))
-        files = [f for f in files if not f.name.startswith('~')]
-        if not files:
-          return None, ['❌ No Excel files found for population discovery']
-      else:
-        files = [path]
-
-      import pandas as pd
-      inventories = []
-      for excel_file in files:
-        try:
-          df = pd.read_excel(excel_file, sheet_name=1, engine='openpyxl')
-        except Exception as error:
-          messages.append(f'⚠️ Could not inspect {excel_file.name}: {error}')
-          continue
-        inventories.append(discover_populations(df))
-
-      inventory = merge_inventories(inventories)
-      if not inventory.populations:
+      summary = self.read_input(file_path, is_directory)
+      messages = list(summary.messages)
+      inventory = summary.inventory
+      if inventory is None or not inventory.populations:
         messages.append('⚠️ No exported populations found in the selected data')
         return inventory, messages
 
       multi = [info for info in inventory.populations if info.scope in MULTI_SCOPES]
       messages.append(
-        f'✅ Discovered {len(inventory.populations)} population(s) across {len(inventories)} file(s); '
+        f'✅ Discovered {len(inventory.populations)} population(s) across '
+        f'{len(summary.files)} file(s); '
         f'{len(multi)} exact double/triple population(s) available'
       )
       if not inventory.has_analyte_metadata:

@@ -17,7 +17,12 @@ class ConfigPanel(ttk.Frame):
   def __init__(self, parent, callback: Optional[Callable] = None):
     super().__init__(parent)
     self.callback = callback
-    
+    # Plate labels filled in from the selected data (species still to be entered)
+    self._adopted_plate_labels = set()
+    # True once a loaded configuration supplied the plate mapping; the data's
+    # plate labels must not overwrite it.
+    self._plates_from_config = False
+
     self.setup_ui()
     self.load_defaults()
   
@@ -158,6 +163,34 @@ class ConfigPanel(ttk.Frame):
   def unavailable_populations(self):
     """Populations requested by a loaded config but absent from the data."""
     return list(self.population_widget.dropped_labels)
+
+  def adopt_data_plates(self, plate_labels):
+    """Fill the Plates tab with the plate labels the selected data really uses.
+
+    Only the sample placeholder and rows this method filled in before (species
+    still empty) are replaced; a loaded configuration or a mapping the user
+    typed is kept. Species stays empty because only the user knows which
+    species was tested. Returns the labels that were filled in.
+    """
+    labels = [str(label).strip() for label in (plate_labels or []) if str(label).strip()]
+    if not labels or self._plates_from_config:
+      return []
+
+    rows = [row for row in self.plate_widget.get_values() if any(row)]
+    replaceable = all(
+      tuple(row) == PlateListWidget.PLACEHOLDER_ROW
+      or (row[0] in self._adopted_plate_labels and not row[1])
+      for row in rows
+    )
+    if rows and not replaceable:
+      return []  # the user configured plates themselves
+    if [row[0] for row in rows] == labels:
+      return []
+
+    self.plate_widget.set_values([[label, ''] for label in labels])
+    self._adopted_plate_labels = set(labels)
+    self.on_config_changed()
+    return labels
 
   def create_plates_tab(self):
     """Create the plates mapping tab."""
@@ -389,6 +422,8 @@ class ConfigPanel(ttk.Frame):
       self.cytokine_widget.set_cytokine_dict(config['cytokines'])
     if 'plates' in config:
       self.plate_widget.set_plate_dict(config['plates'])
+      self._adopted_plate_labels = set()
+      self._plates_from_config = bool(config['plates'])
 
     # Selected populations (applied once the input data has been discovered)
     self.population_widget.set_selected_labels(config.get('populations'))
@@ -435,6 +470,8 @@ class ConfigPanel(ttk.Frame):
     # Reset mappings
     self.cytokine_widget.reset()
     self.plate_widget.reset()
+    self._adopted_plate_labels = set()
+    self._plates_from_config = False
     self.population_widget.reset()
     
     # Reset experimental conditions

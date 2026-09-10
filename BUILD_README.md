@@ -14,18 +14,24 @@ The build system creates a complete Mac application bundle (.app) that includes:
 
 ### Automated Build (Recommended)
 
-The easiest way is to use GitLab CI/CD:
+GitHub Actions (`.github/workflows/build-releases.yml`) builds the Windows
+executable and both macOS app bundles (Intel and Apple Silicon).
 
-1. **Create a new tag** (triggers automatic build):
+1. **Every push to `master`** builds all three. Open the repository →
+   **Actions** → the newest *Build Cross-Platform Releases* run and download
+   `windows-build`, `macos-build-Intel` or `macos-build-Apple-Silicon` from the
+   run's **Artifacts** section. Artifacts are kept for 90 days.
+
+2. **Manual run**: Actions → *Build Cross-Platform Releases* → **Run workflow**
+   (or `gh workflow run build-releases.yml --ref master`).
+
+3. **Publish a release** (only this creates permanent downloads):
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
-
-2. **Download from GitLab Releases**: 
-   - Go to your GitLab project → Releases
-   - Download the DMG or ZIP file
-   - Share with lab members
+   The tag build additionally attaches the DMG/ZIP/EXE files to a GitHub
+   Release, which lab members can download without signing in.
 
 ### Manual Build (Local Development)
 

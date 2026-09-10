@@ -268,13 +268,17 @@ class CytokineListWidget(DynamicListWidget):
 
 class PlateListWidget(DynamicListWidget):
   """Widget for managing plate to species mappings."""
-  
+
+  # Sample values shown before any data is selected; replaced by the plate
+  # labels of the chosen export as long as the user has not edited them.
+  PLACEHOLDER_ROW = ("plate_1", "S. pneumoniae")
+
   def __init__(self, parent, callback: Optional[Callable] = None):
     super().__init__(parent, "Plate Mappings", ["Plate ID", "Species"], callback)
-    
+
     # Add default entry
-    self.add_entry(["plate_1", "S. pneumoniae"])
-    
+    self.add_entry(list(self.PLACEHOLDER_ROW))
+
     # Add one empty entry for adding new plates
     self.add_entry()
   

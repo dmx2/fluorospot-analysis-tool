@@ -2,8 +2,13 @@ name: Build Cross-Platform Releases
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -14,7 +19,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: macos-13
+          # macos-13 was retired in December 2025; macos-15-intel is the
+          # remaining x86_64 image (available until August 2027).
+          - runner: macos-15-intel
             arch: x86_64
             arch_name: Intel
           - runner: macos-latest
@@ -28,7 +35,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -52,10 +59,16 @@ jobs:
       run: |
         python build_single_arch.py ${{ matrix.arch }}
     
+    - name: Verify the app bundle was produced
+      run: |
+        set -e
+        ls -la *.dmg *.zip
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: macos-build-${{ matrix.arch_name }}
+        if-no-files-found: error
         path: |
           *.dmg
           *.zip
@@ -68,7 +81,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -92,10 +105,15 @@ jobs:
       run: |
         python build_windows.py onefile
     
+    - name: Verify the executable was produced
+      run: |
+        Get-ChildItem -Path *.zip, dist/windows/*.exe
+
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
         name: windows-build
+        if-no-files-found: error
         path: |
           *.zip
           dist/windows/*.exe

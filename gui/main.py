@@ -39,6 +39,7 @@ class FluoroSpotGUI:
     # Validation state tracking
     self.file_has_critical_errors = False
     self.file_has_warnings = False
+    self.file_blocking_problems = []
     self.config_has_critical_errors = False
     self.config_has_warnings = False
     
@@ -150,9 +151,11 @@ class FluoroSpotGUI:
     text_frame.columnconfigure(0, weight=1)
     text_frame.rowconfigure(0, weight=1)
     
+    # Tall enough that a blocking problem and its remedy stay readable without
+    # scrolling; validation output is the only place errors are explained.
     self.status_text = tk.Text(
       text_frame,
-      height=6,
+      height=14,
       wrap=tk.WORD,
       state=tk.DISABLED,
       bg=self.root.cget('bg')
@@ -206,45 +209,72 @@ class FluoroSpotGUI:
   def on_file_selected(self, file_path, is_directory):
     """Handle file selection."""
     self.add_status_message(f"Selected {'directory' if is_directory else 'file'}: {file_path}")
-    
+
     # Validate the selected file/directory with detailed messages
-    has_critical_errors, has_warnings, results = self.controller.validate_input_path(file_path, is_directory)
-    
+    outcome = self.controller.validate_input_path(file_path, is_directory)
+
     # Display all validation results
-    for result in results:
-      if result.startswith("✅"):
-        self.add_status_message(result, "success")
-      elif result.startswith("⚠️"):
-        self.add_status_message(result, "warning")
-      elif result.startswith("❌"):
-        self.add_status_message(result, "error")
-      else:
-        self.add_status_message(result, "info")
-    
+    self.show_validation_messages(outcome.messages)
+
     # Store validation state for later use
-    self.file_has_critical_errors = has_critical_errors
-    self.file_has_warnings = has_warnings
+    self.file_has_critical_errors = outcome.has_critical_errors
+    self.file_blocking_problems = list(outcome.blocking)
+    self.file_has_warnings = outcome.has_warnings
 
     # Discover the populations this data actually exports
-    if not has_critical_errors:
+    if not outcome.has_critical_errors:
       inventory, population_messages = self.controller.discover_populations(file_path, is_directory)
       self.config_panel.set_population_inventory(inventory)
-      for message in population_messages:
-        level = 'info'
-        if message.startswith('✅'):
-          level = 'success'
-        elif message.startswith('⚠️'):
-          level = 'warning'
-        elif message.startswith('❌'):
-          level = 'error'
-        self.add_status_message(message, level)
-    
-    if has_critical_errors:
-      self.add_status_message("❌ Critical errors found in input file. Cannot run analysis.", "error")
-    elif has_warnings:
+      self.show_validation_messages(population_messages)
+      self.adopt_data_plates(file_path, is_directory)
+
+    if outcome.has_critical_errors:
+      self.report_blocking_problems(outcome.blocking, "Cannot analyze this input file.")
+    elif outcome.has_warnings:
       self.add_status_message("⚠️ Warnings found in input file. You can still try to run analysis.", "warning")
     else:
       self.add_status_message("✅ Input file validation passed.", "success")
+
+  def adopt_data_plates(self, file_path, is_directory):
+    """Offer the plate labels the data really uses instead of the sample default."""
+    summary = self.controller.get_data_summary(file_path, is_directory) or {}
+    plate_labels = [str(plate) for plate in summary.get('plates', [])]
+    if not plate_labels:
+      return
+    adopted = self.config_panel.adopt_data_plates(plate_labels)
+    if adopted:
+      self.add_status_message(
+        "ℹ️ Plates tab: filled in the plate label(s) found in your data "
+        f"({', '.join(adopted)}). Enter the species for each one so results are labeled; "
+        "the analysis runs either way.", "info")
+
+  def show_validation_messages(self, messages):
+    """Print validation messages with the styling their prefix asks for."""
+    for message in messages or []:
+      if message.startswith("✅"):
+        level = "success"
+      elif message.startswith("⚠️"):
+        level = "warning"
+      elif message.startswith("❌"):
+        level = "error"
+      else:
+        level = "info"
+      self.add_status_message(message, level)
+
+  def report_blocking_problems(self, problems, headline):
+    """Restate every blocking problem next to the verdict, with what to fix.
+
+    The status log scrolls, so the reason must be repeated here; a bare
+    "critical errors found" leaves the user with nothing to act on.
+    """
+    problems = list(dict.fromkeys(problems or []))
+    if not problems:
+      self.add_status_message(f"❌ {headline}", "error")
+      return
+    self.add_status_message(
+      f"❌ {headline} Fix the following, then click 'Validate Configuration' again:", "error")
+    for number, problem in enumerate(problems, 1):
+      self.add_status_message(f"    {number}. {problem}", "error")
   
   def on_config_changed(self, config_data):
     """Handle configuration changes."""
@@ -256,38 +286,27 @@ class FluoroSpotGUI:
     try:
       config_data = self.config_panel.get_configuration()
       file_path, is_directory = self.file_selector.get_selected_path()
-      
+
       if not file_path:
-        self.add_status_message("❌ Please select an input file or directory.", "error")
+        self.add_status_message(
+          "❌ No input selected. Use 'Browse...' to choose the Mabtech Apex export "
+          "(or a folder of exports) first.", "error")
         return
-      
+
       # Validate configuration with detailed messages
-      has_critical_errors, has_warnings, results = self.controller.validate_configuration(config_data, file_path, is_directory)
-      
-      # Display all validation results
-      for result in results:
-        if result.startswith("✅"):
-          self.add_status_message(result, "success")
-        elif result.startswith("⚠️"):
-          self.add_status_message(result, "warning")
-        elif result.startswith("❌"):
-          self.add_status_message(result, "error")
-        elif result.startswith("📁"):
-          self.add_status_message(result, "info")
-        else:
-          self.add_status_message(result, "info")
-      
+      outcome = self.controller.validate_configuration(config_data, file_path, is_directory)
+      self.show_validation_messages(outcome.messages)
+
       # Store validation state for later use
-      self.config_has_critical_errors = has_critical_errors
-      self.config_has_warnings = has_warnings
-      
+      self.config_has_critical_errors = outcome.has_critical_errors
+      self.config_has_warnings = outcome.has_warnings
+
       # Update UI based on validation results
-      file_has_critical_errors = getattr(self, 'file_has_critical_errors', False)
-      overall_critical_errors = has_critical_errors or file_has_critical_errors
-      overall_warnings = has_warnings or getattr(self, 'file_has_warnings', False)
-      
-      if overall_critical_errors:
-        self.add_status_message("❌ Critical errors found. Cannot run analysis until resolved.", "error")
+      blocking = list(outcome.blocking) + list(getattr(self, 'file_blocking_problems', []))
+      overall_warnings = outcome.has_warnings or getattr(self, 'file_has_warnings', False)
+
+      if blocking:
+        self.report_blocking_problems(blocking, "Cannot run the analysis yet.")
         self.run_btn.config(state='disabled')
       elif overall_warnings:
         self.add_status_message("⚠️ Warnings found, but you can still try to run analysis.", "warning")
@@ -295,9 +314,11 @@ class FluoroSpotGUI:
       else:
         self.add_status_message("✅ Configuration validation passed. Ready to run analysis.", "success")
         self.run_btn.config(state='normal')
-        
+
     except Exception as e:
-      self.add_status_message(f"❌ Validation error: {str(e)}", "error")
+      self.add_status_message(
+        f"❌ The configuration could not be validated ({e}). Check the Basic Settings tab: "
+        "cells per well and SFC cutoff must be whole numbers.", "error")
   
   def run_analysis(self):
     """Run the FluoroSpot analysis in a background thread."""
@@ -332,6 +353,9 @@ class FluoroSpotGUI:
     if messagebox.askyesno("Reset Form", "Are you sure you want to reset all settings to default values?"):
       self.file_selector.reset()
       self.config_panel.reset()
+      self.file_has_critical_errors = False
+      self.file_has_warnings = False
+      self.file_blocking_problems = []
       self.progress_var.set(0)
       self.status_text.config(state=tk.NORMAL)
       self.status_text.delete(1.0, tk.END)
